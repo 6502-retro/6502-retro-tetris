@@ -1,4 +1,3 @@
-# vim: set ft=asm_ca65 ts=4 sw=4 et cc=80:
 # 6502-Retro-Tetris Game
 #
 # Copyright (c) 2026 David Latham
@@ -24,6 +23,7 @@ LOAD_ADDR = 800
 BUILD_DIR = build
 SOURCES = main.s \
 	  vdp.s \
+      music_tracker.s \
 	  sn76489.s
 
 OBJS = $(addprefix $(BUILD_DIR)/, $(SOURCES:.s=.o))

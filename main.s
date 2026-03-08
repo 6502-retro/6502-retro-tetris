@@ -42,6 +42,7 @@ tmp2: .res 1
 .align $100
 collision_map: .res $300
 regs: .res 12
+framectr: .byte 0
 
 .code
     ldx #$FF
@@ -73,8 +74,9 @@ start:
     lda #$31                ; set all tile colors to RED on LIGHT GREY
     jsr vdp_setup_colortable
 
+    jsr init_music_tracker
+
     jsr clear_collision_map
-    cli                     ; ready to enable interrupts now.
 
     lda #<str_tetris
     sta ptr2+0
@@ -85,6 +87,8 @@ start:
     jsr vdp_print_xy
     jsr vdp_wait
     jsr vdp_flush
+
+    jsr draw_map
 
     ; spawn one tet
     stz R0    ; rotation
@@ -99,6 +103,9 @@ start:
     sta R5    ; tile pattern
     jsr draw_tet
 
+    stz framectr
+
+    cli                     ; ready to enable interrupts now.
     jsr vdp_wait
     jsr vdp_flush
 
@@ -112,16 +119,67 @@ game_loop:
 ; Get input
     jsr bios_const
     cmp #'z'
-    beq @rotate_tet_ccw
-    cmp #'x'
-    beq @rotate_tet_cw
-    cmp #','
-    beq @move_tet_left
-    cmp #'.'
-    beq @move_tet_right
-    cmp #'q'
-    bne @draw_tet
-    jmp exit
+    bne :+
+    jmp @rotate_tet_ccw
+:   cmp #'x'
+    bne :+
+    jmp @rotate_tet_cw
+:   cmp #','
+    bne :+
+    jmp @move_tet_left
+:   cmp #'.'
+    bne :+
+    jmp @move_tet_right
+    ; =========================================================================
+    ; All of this stuff is debugging stuff.vvvvvvvvvv 
+    ; =========================================================================
+:   cmp #'0'
+    bne :+
+    stz R1
+    jmp @draw_tet
+:   cmp #'1'
+    bne :+
+    lda #1
+    sta R1
+    stz R0
+    jmp @draw_tet
+:   cmp #'2'
+    bne :+
+    lda #2
+    sta R1
+    stz R0
+    jmp @draw_tet
+:   cmp #'3'
+    bne :+
+    lda #3
+    sta R1
+    stz R0
+    jmp @draw_tet
+:   cmp #'4'
+    bne :+
+    lda #4
+    sta R1
+    stz R0
+    jmp @draw_tet
+:   cmp #'5'
+    bne :+
+    lda #5
+    sta R1
+    stz R0
+    jmp @draw_tet
+:   cmp #'6'
+    bne :+
+    lda #6
+    sta R1
+    stz R0
+    jmp @draw_tet
+    ; =========================================================================
+    ; All of this stuff is debugging stuff.^^^^^^^^^^ 
+    ; =========================================================================
+:   cmp #'q'
+    beq :+
+    jmp @draw_tet
+:   jmp exit
 @move_tet_left:
     jsr save_regs
     dec R2
@@ -164,8 +222,13 @@ game_loop:
 :
     jsr vdp_wait
     jsr vdp_flush
-
-    jmp game_loop
+    inc framectr
+    lda framectr
+    cmp #$7
+    bne :+
+    jsr handle_note
+    stz framectr
+:   jmp game_loop
 
 ; setup ptr1 with address of XY in collision map
 xy_to_collision_map_ptr:
@@ -258,11 +321,7 @@ calculate_xy_from_rotations:
     tay
     rts
 
-; given the tet id, the rotation state and the x and y position: we plot the 
-; 4 x,y offsets around the pivot point.
-; INPUTS: A=tid, X=x of pivot, Y=y of pivot, R0 = rotation, R4 is draw to fb or map
-; USES : R0-R4
-draw_tet:
+test_tet_colision:
     ; first test all positions of the tiles for collisions and out of bounds
     jsr calculate_rotation_offset
     ldx #4
@@ -274,6 +333,7 @@ draw_tet:
     bcc :+
     ply
     plx
+    sec
     rts
 :   ply
     iny
@@ -281,14 +341,29 @@ draw_tet:
     plx
     dex
     bne @collision_loop
-    ; if we get here it means we are safe to draw in new location.
+    clc
+    rts
+
+; NOTE: For wall kicks we need to know the previous rotation.  We figure out the transition
+; Will use a lookup table for this?
+;
+
+; given the tet id, the rotation state and the x and y position: we plot the 
+; 4 x,y offsets around the pivot point.
+; INPUTS: A=tid, X=x of pivot, Y=y of pivot, R0 = rotation, R4 is draw to fb or map
+; USES : R0-R4
+draw_tet:
+    jsr test_tet_colision
+    bcc :+
+    rts
+:   ; if we get here it means we are safe to draw in new location.
     jsr calculate_rotation_offset
     ldx #4
 @loop:
     phx     ; save block counter
     phy     ; save offset
     jsr calculate_xy_from_rotations
-:   lda R4
+    lda R4
     bne :+
     lda R5  ; tet tile
     jsr vdp_char_xy
@@ -356,7 +431,55 @@ restore_regs:
     pla
     rts
 
+; draws the map offset by PLAYFIELD_X_OFFSET starting at Y=0
+draw_map:
+    lda #<map
+    sta ptr1+0
+    lda #>map
+    sta ptr1+1
+
+    clc
+    lda #<vdp_screenbuf
+    adc #(PLAYFIELD_X_OFFSET-1)
+    sta ptr2+0
+    lda #>vdp_screenbuf
+    sta ptr2+1
+
+    ldy #0
+@loop:
+    lda (ptr1),y
+    cmp #$80
+    beq @next_line
+    cmp #$FF
+    beq @done
+    sta (ptr2),y
+    iny
+    bra @loop
+@next_line:
+    clc
+    lda ptr2+0 ; add 22 on to screen pointer
+    adc #32
+    sta ptr2+0
+    lda ptr2+1
+    adc #0
+    sta ptr2+1
+
+    clc
+    lda ptr1+0
+    adc #13
+    sta ptr1+0
+    lda ptr1+1
+    adc #0
+    sta ptr1+1
+    ldy #0    ; reset y to 0
+    bra @loop
+@done:
+    rts
+
+
+
 exit:
+    jsr sn_silence
     jmp bios_wboot
 
 .rodata
