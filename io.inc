@@ -1,0 +1,84 @@
+; vim: set ft=asm_ca65 ts=4 sw=4 et cc=80:
+; 6502-Retro-Tetris Game
+;
+; Copyright (c) 2026 David Latham
+;
+; This code is licensed under the MIT license
+;
+; https://github.com/6502-retro/6502-retro-tetris
+
+IOPAGE          = $BF00  ; Edit this if your IO page is someplace else.
+
+IOBANK          = IOPAGE + $00
+IOACIA          = IOPAGE + $10
+IOVIA1          = IOPAGE + $20
+IOVIA2          = IOPAGE + $30
+IOVDP           = IOPAGE + $40
+IOJOY           = IOPAGE + $50
+IOEXP1          = IOPAGE + $60
+IOEXP2          = IOPAGE + $70
+IOCSH           = IOPAGE + $80 ; $80 - $FF
+
+
+rambankreg      = IOBANK + $0
+rombankreg      = IOBANK + $1
+
+acia_data       = IOACIA + $0
+acia_status     = IOACIA + $1
+acia_command    = IOACIA + $2
+acia_control    = IOACIA + $3
+
+via_portb       = IOVIA1 + $0
+via_porta       = IOVIA1 + $1
+via_ddrb        = IOVIA1 + $2
+via_ddra        = IOVIA1 + $3
+via_t1cl        = IOVIA1 + $4
+via_t1ch        = IOVIA1 + $5
+via_t1ll        = IOVIA1 + $6
+via_t1lh        = IOVIA1 + $7
+via_t2cl        = IOVIA1 + $8
+via_t2ch        = IOVIA1 + $9
+via_sr          = IOVIA1 + $A
+via_acr         = IOVIA1 + $B
+via_pcr         = IOVIA1 + $C
+via_ifr         = IOVIA1 + $D
+via_ier         = IOVIA1 + $E
+
+vdp_ram         = IOVDP  + $0
+vdp_reg         = IOVDP  + $1
+
+; VIA1 PORTA PINS
+SD_SCK          = 1 << 0
+SD_CS           = 1 << 1
+SPI_CS2         = 1 << 2
+SPI_CS3         = 1 << 3
+LED             = 1 << 4
+SN_WE           = 1 << 5
+SN_READY        = 1 << 6
+SD_MOSI         = 1 << 7
+
+LED_ON          = LED
+LED_OFF         = !LED
+
+; RAM BANK LATCH PINS
+ROM_SEL         = 1 << 6
+ROMSW           = 1 << 7
+
+ROM_SWITCH_ON   = ROMSW   ; ORA
+ROM_SWITCH_OFF  = !ROMSW  ; AND
+
+JOY_UP          = $7F     ; RAW IO VALUES FROM THE HARDWARE
+JOY_DOWN        = $BF
+JOY_LEFT        = $FB
+JOY_RIGHT       = $DF
+JOY_FIRE        = $FE
+JOY_RELEASED    = $FF
+;
+; JOYSTICK VALUE XOR 0xFF THEN AND WITH THESE
+;
+JOY_MAP_LEFT    = 1 << 2 ; %00000100 
+JOY_MAP_DOWN    = 1 << 6 ; %01000000
+JOY_MAP_RIGHT   = 1 << 5 ; %00100000
+JOY_MAP_UP      = 1 << 7 ; %10000000
+JOY_MAP_FIRE    = 1 << 0 ; %00000001
+
