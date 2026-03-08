@@ -42,7 +42,7 @@ tmp2: .res 1
 .align $100
 collision_map: .res $300
 regs: .res 12
-framectr: .byte 0
+musicframectr: .byte 0
 
 .code
     ldx #$FF
@@ -103,7 +103,7 @@ start:
     sta R5    ; tile pattern
     jsr draw_tet
 
-    stz framectr
+    stz musicframectr
 
     cli                     ; ready to enable interrupts now.
     jsr vdp_wait
@@ -222,12 +222,12 @@ game_loop:
 :
     jsr vdp_wait
     jsr vdp_flush
-    inc framectr
-    lda framectr
+    inc musicframectr
+    lda musicframectr
     cmp #$7
     bne :+
     jsr handle_note
-    stz framectr
+    stz musicframectr
 :   jmp game_loop
 
 ; setup ptr1 with address of XY in collision map
