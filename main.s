@@ -43,6 +43,9 @@ tmp2: .res 1
 collision_map: .res $300
 regs: .res 12
 musicframectr: .byte 0
+tetframectr:   .byte 0
+speed:         .byte 0
+level:         .byte 0
 
 .code
     ldx #$FF
@@ -90,31 +93,42 @@ start:
 
     jsr draw_map
 
-    ; spawn one tet
-    stz R0    ; rotation
-    lda #1
-    sta R1    ; tet id
-    lda #10
-    sta R2    ; tet -x
-    lda #10
-    sta R3    ; tet -y
-    stz R4    ; save to collision map 0 = NO, != 0 = YES
-    lda #'#'
-    sta R5    ; tile pattern
-    jsr draw_tet
-
     stz musicframectr
+    stz tetframectr
+    ;stz level
+    lda #19
+    sta level
+    ldx level
+    lda speeds,x
+    sta speed
 
     cli                     ; ready to enable interrupts now.
     jsr vdp_wait
     jsr vdp_flush
+
+spawn_tet:
+    stz R0    ; rotation
+    lda #1
+    sta R1    ; tet id
+    lda #(PLAYFIELD_X_OFFSET + 5)
+    sta R2    ; tet -x
+    lda #1
+    sta R3    ; tet -y
+    stz R4    ; save to collision map 0 = NO, != 0 = YES
+    ldx R1
+    lda tet_blocks,x
+    sta R5    ; tile pattern
+    jsr draw_tet
+
+    ; fall through
 
 ; Game loop
 game_loop:
     lda #' '
     sta R5
     jsr draw_tet
-    lda #'#'
+    ldx R1
+    lda tet_blocks,x
     sta R5
 ; Get input
     jsr bios_const
@@ -207,21 +221,46 @@ game_loop:
     dec 
     and #$03
     sta R0
+    jmp @draw_tet
 @draw_tet:
-    jsr draw_tet
-    bcc :+
-    pha
-    lda #<str_collision
-    ldx #>str_collision
-    jsr bios_puts
-    pla
-    jsr bios_prbyte ; print out the enum of the collision. See tetris.inc
+    ; check if it's time to move the piece down one line.
+    lda tetframectr
+    cmp speed
+    bne :+
+    stz tetframectr
+    jsr save_regs
+    inc R3
 
+:   jsr draw_tet
+    bcc @draw
+    cmp #PIECE_COLLISION
+    beq @is_top_row
+    cmp #FLOOR_COLLISION
+    bne @restore            ; not floor collision, restore old position and draw
+    bra @lock_piece
+@is_top_row:
+    lda R3
+    cmp #1
+    bne @lock_piece
+    jmp exit                ; TODO: DO A PROPER GAME OVER SEQUENCE
+@lock_piece:
     jsr restore_regs
-    jsr draw_tet
-:
+    jsr draw_tet            ; redraw on playfield
+    lda #1
+    sta R4                  ; plot map = true
+    jsr draw_tet            ; draw on to map
     jsr vdp_wait
     jsr vdp_flush
+    jmp check_line_clear
+@restore:
+    jsr restore_regs
+@draw:
+    jsr draw_tet
+    jsr vdp_wait
+    jsr vdp_flush
+
+    inc tetframectr
+
     inc musicframectr
     lda musicframectr
     cmp #$7
@@ -229,6 +268,24 @@ game_loop:
     jsr handle_note
     stz musicframectr
 :   jmp game_loop
+
+
+check_line_clear:
+    ; zero line counter
+    ; loop through the rows starting at the bottom.
+    ;   check the collision map tiles in each column.
+    ;     if empty, then next line
+    ;   if all not empty, then:
+    ;     increment line counter
+    ;     add empty row at top of collision map
+    ;     move all rows in collision map down by one row. (overwriting cleared line)
+    ;     add empty row at top of playfield
+    ;     move all rows in playfield down by one row. (overwriting cleared line)
+    ;   if line counter = 3 (max 4 lines from 0 - 3) then end loop.
+    ;
+    ; update score according to total number of lines cleared.
+    ; finally spawn new tet
+    jmp spawn_tet
 
 ; setup ptr1 with address of XY in collision map
 xy_to_collision_map_ptr:
@@ -267,7 +324,7 @@ tile_test_collision:
     cmp #(PLAYFIELD_X_OFFSET + 10)
     bcs @right_collision_detected
     tya
-    cmp #23
+    cmp #22
     bcs @floor_collision_detected
 
     jsr xy_to_collision_map_ptr
@@ -344,10 +401,6 @@ test_tet_colision:
     clc
     rts
 
-; NOTE: For wall kicks we need to know the previous rotation.  We figure out the transition
-; Will use a lookup table for this?
-;
-
 ; given the tet id, the rotation state and the x and y position: we plot the 
 ; 4 x,y offsets around the pivot point.
 ; INPUTS: A=tid, X=x of pivot, Y=y of pivot, R0 = rotation, R4 is draw to fb or map
@@ -368,7 +421,7 @@ draw_tet:
     lda R5  ; tet tile
     jsr vdp_char_xy
     bra :++
-:   jsr plot_map_xy
+:   jsr plot_collision_map_xy
 :
     ply     ; restore offset
     iny     ; increment offset for next block
@@ -380,7 +433,7 @@ draw_tet:
 
 ; given a tet described by R0, R1, R2 and R3 we calculate the map offset and
 ; save the piece there.
-plot_map_xy:
+plot_collision_map_xy:
     jsr xy_to_collision_map_ptr
     lda #1
     sta (ptr1)
@@ -477,7 +530,6 @@ draw_map:
     rts
 
 
-
 exit:
     jsr sn_silence
     jmp bios_wboot
@@ -490,7 +542,8 @@ str_by_pd:          .asciiz "By Productiondave"
 str_cc2026:         .asciiz "2026"
 str_collision:      .byte    10,13,"COLLISION DETECTED: ",0
 str_crlf:           .byte    10,13,0
-
+tet_blocks:         .byte "ITZSLJO"
+speeds:             .byte 53,49,45,41,37,33,28,22,17,11,10,9,8,7,6,6,5,5,4,4,3
 font_start:
     .include "font.s"
 font_end:
