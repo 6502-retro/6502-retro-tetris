@@ -22,9 +22,10 @@ LOAD_ADDR = 800
 
 BUILD_DIR = build
 SOURCES = main.s \
-	  vdp.s \
-      music_tracker.s \
-	  sn76489.s
+					vdp.s \
+					rand.s \
+					music_tracker.s \
+					sn76489.s
 
 OBJS = $(addprefix $(BUILD_DIR)/, $(SOURCES:.s=.o))
 

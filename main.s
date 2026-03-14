@@ -39,11 +39,12 @@ tmp2: .res 1
 
 .bss
 
-regs: .res 12
-musicframectr: .byte 0
-tetframectr:   .byte 0
-speed:         .byte 0
-level:         .byte 0
+regs:          .res 12
+musicframectr: .res 1
+tetframectr:   .res 1
+speed:         .res 1
+level:         .res 1
+next_tet_regs: .res 5
 
 .code
     ldx #$FF
@@ -117,19 +118,44 @@ start:
     cli                     ; ready to enable interrupts now.
     jsr vdp_wait
     jsr vdp_flush
+    jsr spawn_tet           ; pre spawn a tet
 
+; copy next_tet regs to R0-R4.
+; erase next tet from display
+; create new next_tet and draw it.
 spawn_tet:
-    stz R0    ; rotation
-    lda #1
-    sta R1    ; tet id
+    lda next_tet_regs + 4   ; save next tet block pattern
+    pha
+    lda #' '                ; erase next tet
+    sta next_tet_regs + 4   ; restore next tet block pattern
+    jsr draw_next_tet
+    pla
+    sta next_tet_regs + 4
+
+    ldx #4                  ; copy next tet to current tet.
+:   lda next_tet_regs,x
+    sta R0,x
+    dex
+    bpl :-
+
+    ; make new next tet
+    stz next_tet_regs + 0    ; rotation
+:   jsr _rand
+    and #$07
+    cmp #6
+    bcs :-
+    ; BUG: THIS IS NOT QUITE RIGHT THIS RANDOM STUFF
+    ; Should be a Bag of 7
+    sta next_tet_regs + 1    ; tet id
     lda #(PLAYFIELD_X_OFFSET + 5)
-    sta R2    ; tet -x
+    sta next_tet_regs + 2    ; tet -x
     lda #1
-    sta R3    ; tet -y
-    ldx R1
+    sta next_tet_regs + 3    ; tet -y
+    ldx next_tet_regs + 1 
     lda tet_blocks,x
-    sta R4    ; tile pattern
-    jsr draw_tet
+    sta next_tet_regs + 4    ; tile pattern
+
+    jsr draw_next_tet
     jsr vdp_wait
     jsr vdp_flush
 
@@ -240,16 +266,12 @@ game_loop:
 
     jsr draw_tet
     bcc @flush
-    pha
-    jsr bios_prbyte
-    pla
     cmp #PIECE_COLLISION
     beq @is_top_row
     cmp #FLOOR_COLLISION
     bne @restore            ; not floor collision, restore old position and draw
     bra @lock_piece
 @is_top_row:
-    jsr dump_regs
     lda R3
     dec                     ; we had already moved it so need to test where we were
     cmp #1
@@ -335,6 +357,19 @@ tile_test_collision:
     sec
     rts
 
+; given the tet id in A and the rotation in next_tet_regs + 0, we calculate the rotation data
+; offset and return it in Y
+calculate_rotation_offset_next_tet:
+    lda next_tet_regs + 1
+    mul32   ; tet id x 32
+    sta tmp1; save to tmp
+    lda next_tet_regs + 0  ; rotation
+    mul8    ; offset by rot x 8
+    clc     ; add to tmp
+    adc tmp1
+    tay     ; Y = tet_id * 32 + rotation * 8 - this is the offset into rotations
+    rts
+
 ; given the tet id in A and the rotation in R0, we calculate the rotation data
 ; offset and return it in Y
 calculate_rotation_offset:
@@ -347,6 +382,21 @@ calculate_rotation_offset:
     adc tmp1
     tay     ; Y = tet_id * 32 + rotation * 8 - this is the offset into rotations
     rts
+
+; given X in next_tet_regs+2 and Y in next_tet_regs+3, and rotation offset in
+; Y, return new XY position in X and Y
+calculate_xy_from_rotations_next_tet:
+    lda rotations,y
+    clc
+    adc #20   ; x
+    tax
+    iny       ; next value is Y offset
+    lda rotations,y
+    clc
+    adc #4    ; y
+    tay
+    rts
+
 
 ; given X in R2 and Y in R3, and rotation offset in Y, return new XY position
 ; in X and Y
@@ -384,6 +434,26 @@ test_tet_collision:
     bne @collision_loop
     clc
     rts
+
+; given tet details in next_tet_regs, draw it.
+draw_next_tet:
+    jsr calculate_rotation_offset_next_tet
+    ldx #4
+@loop:
+    phx
+    phy
+    jsr calculate_xy_from_rotations_next_tet
+    lda next_tet_regs+4
+    jsr vdp_char_xy
+    ply
+    iny
+    iny
+    plx
+    dex
+    bne @loop
+    clc
+    rts
+
 
 ; given the tet id, the rotation state and the x and y position: we plot the 
 ; 4 x,y offsets around the pivot point.
