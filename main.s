@@ -45,6 +45,8 @@ tetframectr:   .res 1
 speed:         .res 1
 level:         .res 1
 next_tet_regs: .res 5
+bag:           .res 1
+line_ctr:      .res 1
 
 .code
     ldx #$FF
@@ -115,24 +117,29 @@ start:
     lda speeds,x
     sta speed
 
+    stz bag
+
     cli                     ; ready to enable interrupts now.
     jsr vdp_wait
     jsr vdp_flush
-    jsr spawn_tet           ; pre spawn a tet
+
+    jsr spawn_tet
+    jsr spawn_tet           ; spawn two to make sure we don't get duplicates up front.
+    jmp game_loop
 
 ; copy next_tet regs to R0-R4.
 ; erase next tet from display
 ; create new next_tet and draw it.
 spawn_tet:
-    lda next_tet_regs + 4   ; save next tet block pattern
+    lda next_tet_regs + 4    ; save next tet block pattern
     pha
-    lda #' '                ; erase next tet
-    sta next_tet_regs + 4   ; restore next tet block pattern
+    lda #' '                 ; erase next tet
+    sta next_tet_regs + 4    ; restore next tet block pattern
     jsr draw_next_tet
     pla
     sta next_tet_regs + 4
 
-    ldx #4                  ; copy next tet to current tet.
+    ldx #4                   ; copy next tet to current tet.
 :   lda next_tet_regs,x
     sta R0,x
     dex
@@ -140,12 +147,7 @@ spawn_tet:
 
     ; make new next tet
     stz next_tet_regs + 0    ; rotation
-:   jsr _rand
-    and #$07
-    cmp #6
-    bcs :-
-    ; BUG: THIS IS NOT QUITE RIGHT THIS RANDOM STUFF
-    ; Should be a Bag of 7
+    jsr bag_of_7             ; get next tet
     sta next_tet_regs + 1    ; tet id
     lda #(PLAYFIELD_X_OFFSET + 5)
     sta next_tet_regs + 2    ; tet -x
@@ -158,8 +160,37 @@ spawn_tet:
     jsr draw_next_tet
     jsr vdp_wait
     jsr vdp_flush
+    rts
 
-    ; fall through
+bag_of_7:
+    lda bag
+    cmp #$7F
+    bne @try_again
+    stz bag                 ; bag was full, so empty it.
+@try_again:
+    jsr _rand
+    and #$07
+    cmp #7
+    bcs @try_again          ; keep searching for a number between 0 and 6 inclusive
+
+    ; we have a number between 0 and 6 (inclusive)
+    sta R6                  ; save to temp var
+    tax                     ; rotate carry left by number of times given by rand
+    inx
+    lda #0
+    sec
+:   rol
+    dex
+    bne :-
+    sta R7                  ; save this in case we want to OR it with bag
+    and bag                 ; test if the bit is already set in bag.
+    bne @try_again          ; bit is set so try again.  we know there is room.
+    ; bit is not set so set it.
+    lda R7
+    ora bag                 ; set new bit in 
+    sta bag
+    lda R6                  ; restore number from temp
+    rts
 
 ; Game loop
 game_loop:
@@ -302,22 +333,59 @@ game_loop:
 :   jmp game_loop
 
 
+; given a row in Y, check if each position along it's X axis is empty
+; returns with Carry Set if row is full otherwise clear
+check_row:
+    ldx #PLAYFIELD_X_OFFSET
+:   phx
+    phy
+    jsr vdp_read_char_xy
+    cmp #' '
+    beq @row_not_full
+    ply
+    plx
+    inx
+    cpx #PLAYFIELD_X_OFFSET+10
+    bne :-
+    ; row is full
+    sec
+    rts
+@row_not_full:
+    ply
+    plx
+    clc
+    rts
+
 check_line_clear:
     ; zero line counter
     ; loop through the rows starting at the bottom.
-    ;   check the collision map tiles in each column.
+    ;   check the playfield for a tile at each horizontal position along the line
     ;     if empty, then next line
     ;   if all not empty, then:
     ;     increment line counter
-    ;     add empty row at top of collision map
-    ;     move all rows in collision map down by one row. (overwriting cleared line)
     ;     add empty row at top of playfield
     ;     move all rows in playfield down by one row. (overwriting cleared line)
     ;   if line counter = 3 (max 4 lines from 0 - 3) then end loop.
     ;
     ; update score according to total number of lines cleared.
     ; finally spawn new tet
-    jmp spawn_tet
+    stz line_ctr
+    ldy #21
+@next_line:
+    jsr check_row
+    bcs @row_full
+    dey
+    cpy #2
+    bne @next_line
+
+    jsr spawn_tet
+    jmp game_loop
+@row_full:
+    lda #'X'
+    jsr bios_conout
+
+    jsr spawn_tet
+    jmp game_loop
 
 ; given the new x and y position: we look at the
 ; collision map and test if each block in the new location is clear.
