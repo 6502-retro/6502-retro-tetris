@@ -39,8 +39,6 @@ tmp2: .res 1
 
 .bss
 
-.align $100
-collision_map: .res $300
 regs: .res 12
 musicframectr: .byte 0
 tetframectr:   .byte 0
@@ -59,6 +57,23 @@ crlf:
     lda #<str_crlf
     ldx #>str_crlf
     jmp bios_puts
+
+wait_for_exit:
+    lda #'>'
+    jsr bios_conout
+    jsr bios_conin
+    jmp exit
+
+dump_regs:
+    jsr crlf
+    ldx #0
+:
+    lda R0,x
+    jsr bios_prbyte
+    inx
+    cpx #12
+    bne :-
+    rts
 
 start:
     jsr vdp_g1_init         ; Init the VDP and set up for graphics mode.  See
@@ -79,8 +94,6 @@ start:
 
     jsr init_music_tracker
 
-    jsr clear_collision_map
-
     lda #<str_tetris
     sta ptr2+0
     lda #>str_tetris
@@ -95,8 +108,7 @@ start:
 
     stz musicframectr
     stz tetframectr
-    ;stz level
-    lda #19
+    lda #10
     sta level
     ldx level
     lda speeds,x
@@ -114,22 +126,25 @@ spawn_tet:
     sta R2    ; tet -x
     lda #1
     sta R3    ; tet -y
-    stz R4    ; save to collision map 0 = NO, != 0 = YES
     ldx R1
     lda tet_blocks,x
-    sta R5    ; tile pattern
+    sta R4    ; tile pattern
     jsr draw_tet
+    jsr vdp_wait
+    jsr vdp_flush
 
     ; fall through
 
 ; Game loop
 game_loop:
+    stz R5              ; moving down flag false.  used in collision detection
+    jsr save_regs       ; we only want to lock a piece if we were moving down.
     lda #' '
-    sta R5
-    jsr draw_tet
+    sta R4
+    jsr draw_tet        ; first we draw the tet as being empty (spaces)
     ldx R1
     lda tet_blocks,x
-    sta R5
+    sta R4
 ; Get input
     jsr bios_const
     cmp #'z'
@@ -195,67 +210,62 @@ game_loop:
     jmp @draw_tet
 :   jmp exit
 @move_tet_left:
-    jsr save_regs
     dec R2
     bra @draw_tet
 @move_tet_right:
-    jsr save_regs
     inc R2
     bra @draw_tet
 @rotate_tet_cw:
-    jsr save_regs
-    lda #' '
-    sta R5          ; erase
-    jsr draw_tet
     lda R0          ; rotate
     inc 
     and #$03
     sta R0
     bra @draw_tet
 @rotate_tet_ccw:
-    jsr save_regs
-    lda #' '
-    sta R5          ; erase
-    jsr draw_tet
     lda R0          ; rotate
     dec 
     and #$03
     sta R0
-    jmp @draw_tet
+    ;jmp @draw_tet ; fall through
 @draw_tet:
     ; check if it's time to move the piece down one line.
     lda tetframectr
     cmp speed
-    bne :+
+    bne @draw
     stz tetframectr
-    jsr save_regs
     inc R3
+    inc R5          ; moving down flag TRUE
 
-:   jsr draw_tet
-    bcc @draw
+@draw:
+
+    jsr draw_tet
+    bcc @flush
+    pha
+    jsr bios_prbyte
+    pla
     cmp #PIECE_COLLISION
     beq @is_top_row
     cmp #FLOOR_COLLISION
     bne @restore            ; not floor collision, restore old position and draw
     bra @lock_piece
 @is_top_row:
+    jsr dump_regs
     lda R3
+    dec                     ; we had already moved it so need to test where we were
     cmp #1
     bne @lock_piece
     jmp exit                ; TODO: DO A PROPER GAME OVER SEQUENCE
 @lock_piece:
+    lda R5
+    beq @restore            ; were we moving down? YES then lock piece
     jsr restore_regs
-    jsr draw_tet            ; redraw on playfield
-    lda #1
-    sta R4                  ; plot map = true
-    jsr draw_tet            ; draw on to map
+    jsr draw_tet            ; draw in previous place
     jsr vdp_wait
     jsr vdp_flush
     jmp check_line_clear
 @restore:
     jsr restore_regs
-@draw:
-    jsr draw_tet
+@flush:
     jsr vdp_wait
     jsr vdp_flush
 
@@ -287,31 +297,6 @@ check_line_clear:
     ; finally spawn new tet
     jmp spawn_tet
 
-; setup ptr1 with address of XY in collision map
-xy_to_collision_map_ptr:
-    stz ptr1                ; The low byte of the pointer will be zero due to
-    lda #>collision_map     ; page alignment. Set ptr1+1 to high byte of
-    sta ptr1+1              ; framebuffer address.
-
-    tya                     ; Transfer Y to A for div8 macro
-    div8                    ; divide A / 8 (lsr, lsr, lsr)
-    clc                     ; prepare carry for add with carry.
-    adc ptr1+1              ; Add to Y/8 to high byte of pointer
-    sta ptr1+1
-    tya                     ; Transfer Y to A for remainder of Y/8
-    and  #$07               ; Find the remainder of Y/8
-    mul32                   ; Multiply by 32 (asl, asl, asl, asl, asl) and save
-    sta ptr1                ; to ptr1.
-    ; add X to pointer
-    clc                     ; Prepare carry for add with carry.
-    txa                     ; Add X to the current value of ptr1 and then add
-    adc ptr1                ; the value of the carry bit to ptr1+1 thus
-    sta ptr1                ; the addition.
-    lda #0
-    adc ptr1+1
-    sta ptr1+1
-    rts
-
 ; given the new x and y position: we look at the
 ; collision map and test if each block in the new location is clear.
 ; return carry SET with collide condition status in A.  Or carry clear to indicate 
@@ -327,9 +312,8 @@ tile_test_collision:
     cmp #22
     bcs @floor_collision_detected
 
-    jsr xy_to_collision_map_ptr
-    ; read character at (ptr1)
-    lda (ptr1)
+    jsr vdp_read_char_xy
+    cmp #' '
     bne @collision_detected
     lda #0
     clc                     ; no collision detected
@@ -378,7 +362,7 @@ calculate_xy_from_rotations:
     tay
     rts
 
-test_tet_colision:
+test_tet_collision:
     ; first test all positions of the tiles for collisions and out of bounds
     jsr calculate_rotation_offset
     ldx #4
@@ -403,10 +387,13 @@ test_tet_colision:
 
 ; given the tet id, the rotation state and the x and y position: we plot the 
 ; 4 x,y offsets around the pivot point.
-; INPUTS: A=tid, X=x of pivot, Y=y of pivot, R0 = rotation, R4 is draw to fb or map
+; INPUTS: A=tid, X=x of pivot, Y=y of pivot, R0 = rotation,
 ; USES : R0-R4
 draw_tet:
-    jsr test_tet_colision
+    lda R4
+    cmp #' '  ; do not test for collision if erasing tet
+    beq :+
+    jsr test_tet_collision
     bcc :+
     rts
 :   ; if we get here it means we are safe to draw in new location.
@@ -416,46 +403,15 @@ draw_tet:
     phx     ; save block counter
     phy     ; save offset
     jsr calculate_xy_from_rotations
-    lda R4
-    bne :+
-    lda R5  ; tet tile
+    lda R4  ; tet tile
     jsr vdp_char_xy
-    bra :++
-:   jsr plot_collision_map_xy
-:
     ply     ; restore offset
     iny     ; increment offset for next block
     iny     ;
     plx     ; restore block counter
     dex     ; decrement
     bne @loop ; loop if not finished.
-    rts
-
-; given a tet described by R0, R1, R2 and R3 we calculate the map offset and
-; save the piece there.
-plot_collision_map_xy:
-    jsr xy_to_collision_map_ptr
-    lda #1
-    sta (ptr1)
-    rts
-
-; Zero out the collision map.  We get some efficiency here because the map is
-; page aligned.
-clear_collision_map:
-    lda #<collision_map
-    sta ptr1+0
-    lda #>collision_map
-    sta ptr1+1
-    ldx #3  ; we do 3 pages
-    ldy #0
-    lda #0
-@L1:
-    sta (ptr1),y
-    iny
-    bne @L1
-    inc ptr1+1
-    dex
-    bne @L1
+    clc
     rts
 
 save_regs:
