@@ -111,8 +111,7 @@ start:
 
     stz musicframectr
     stz tetframectr
-    lda #10
-    sta level
+    stz level
     ldx level
     lda speeds,x
     sta speed
@@ -216,52 +215,9 @@ game_loop:
 :   cmp #'.'
     bne :+
     jmp @move_tet_right
-    ; =========================================================================
-    ; All of this stuff is debugging stuff.vvvvvvvvvv 
-    ; =========================================================================
-:   cmp #'0'
+:   cmp #' '
     bne :+
-    stz R1
-    jmp @draw_tet
-:   cmp #'1'
-    bne :+
-    lda #1
-    sta R1
-    stz R0
-    jmp @draw_tet
-:   cmp #'2'
-    bne :+
-    lda #2
-    sta R1
-    stz R0
-    jmp @draw_tet
-:   cmp #'3'
-    bne :+
-    lda #3
-    sta R1
-    stz R0
-    jmp @draw_tet
-:   cmp #'4'
-    bne :+
-    lda #4
-    sta R1
-    stz R0
-    jmp @draw_tet
-:   cmp #'5'
-    bne :+
-    lda #5
-    sta R1
-    stz R0
-    jmp @draw_tet
-:   cmp #'6'
-    bne :+
-    lda #6
-    sta R1
-    stz R0
-    jmp @draw_tet
-    ; =========================================================================
-    ; All of this stuff is debugging stuff.^^^^^^^^^^ 
-    ; =========================================================================
+    jmp @hard_drop_tet
 :   cmp #'q'
     beq :+
     jmp @draw_tet
@@ -283,7 +239,10 @@ game_loop:
     dec 
     and #$03
     sta R0
+    bra @draw_tet
     ;jmp @draw_tet ; fall through
+@hard_drop_tet:
+    jmp hard_drop_tet
 @draw_tet:
     ; check if it's time to move the piece down one line.
     lda tetframectr
@@ -333,9 +292,23 @@ game_loop:
 :   jmp game_loop
 
 
+hard_drop_tet:
+    lda #' '
+    sta R4
+    jsr draw_tet
+    inc R3
+    ldx R1
+    lda tet_blocks,x
+    sta R4
+    jsr draw_tet
+    bcc hard_drop_tet
+    dec R3
+    jsr draw_tet
+    jmp game_loop
+
 ; given a row in Y, check if each position along it's X axis is empty
 ; returns with Carry Set if row is full otherwise clear
-check_row:
+check_line:
     ldx #PLAYFIELD_X_OFFSET
 :   phx
     phy
@@ -356,6 +329,33 @@ check_row:
     clc
     rts
 
+; drop lines down to current line given by Y
+drop_lines:
+    sty R6            ; save it in temp var
+@line_loop:
+    ldx #PLAYFIELD_X_OFFSET
+@column_loop:
+    dey
+    jsr vdp_read_char_xy
+    iny
+    jsr vdp_char_xy
+    inx
+    cpx #PLAYFIELD_X_OFFSET+10
+    bne @column_loop
+    dey
+    cpy #1
+    bne @line_loop
+
+    ldx #PLAYFIELD_X_OFFSET
+    lda #' '
+@clear_top_row_loop
+    jsr vdp_char_xy
+    inx
+    cpx #PLAYFIELD_X_OFFSET+10
+    bne @clear_top_row_loop
+    ldy R6          ; restore Y
+    rts
+
 check_line_clear:
     ; zero line counter
     ; loop through the rows starting at the bottom.
@@ -372,7 +372,7 @@ check_line_clear:
     stz line_ctr
     ldy #21
 @next_line:
-    jsr check_row
+    jsr check_line
     bcs @row_full
     dey
     cpy #2
@@ -383,9 +383,8 @@ check_line_clear:
 @row_full:
     lda #'X'
     jsr bios_conout
-
-    jsr spawn_tet
-    jmp game_loop
+    jsr drop_lines          ; y contains line to drop to
+    jmp check_line_clear
 
 ; given the new x and y position: we look at the
 ; collision map and test if each block in the new location is clear.
