@@ -15,7 +15,7 @@
 .export vdp_g1_init, vdp_clear_screenbuf, vdp_wait, vdp_flush
 .export vdp_screenbuf, vdp_xy_to_ptr, vdp_print_xy, vdp_char_xy
 .export vdp_read_char_xy, vdp_color_char, vdp_set_write_address
-.export vdp_load_font_patterns, vdp_load_sprite_patterns
+.export vdp_load_font_patterns, vdp_load_sprite_patterns,vdp_load_colortable
 .export vdp_setup_colortable, vdp_flush_sprite_attributes
 
 .autoimport
@@ -227,6 +227,25 @@ vdp_flush:
     bne :-                  ; decement the page counter and loop until 0.
     rts
 
+; Copy the color table pointed to by XY into the VDP memory.
+vdp_load_colortable:
+    pha
+    phx
+    lda #<COLORTABLE
+    ldx #>COLORTABLE
+    jsr vdp_set_write_address
+    plx
+    pla
+    sta ptr1+0
+    stx ptr1+1
+    ldy #0
+:   lda (ptr1),y
+    sta vdp_ram
+    iny
+    cpy #32
+    bne :-
+    rts
+
 ; Wrtite the value in A to every colortable address in VRAM.
 ; INPUT: A is the color data to write.
 ; OUTPUT: VOID
@@ -237,11 +256,9 @@ vdp_setup_colortable:
     jsr vdp_set_write_address
     tya                     ; restore A
     ldy #0                  ; Y offset for byte copy.
-    ldx #4                  ; X is the page counter.
 :   sta vdp_ram             ; ssave to VRAM
-    iny                     ; increment and loop until Y rolls over.
-    bne :-
-    dex                     ; decrement page counter and loop until 0.
+    iny
+    cpy #32
     bne :-
     rts
 

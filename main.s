@@ -78,6 +78,55 @@ dump_regs:
     bne :-
     rts
 
+; AX points to 8 byte block pattern
+; Y is the value in the name table for this block.  EG: $20 would be SPACE on a
+; regular font.
+set_block_pattern:
+    pha                 ; save A and X so we can set the vdp write address
+    phx
+
+    lda #<PATTERNTABLE  ; vdp write address + (Y * 8)
+    sta ptr1+0
+    lda #>PATTERNTABLE
+    sta ptr1+1
+
+    tya
+    clc
+    ; multiply A by 8 into a 16 bit memory ptr2
+    sta ptr2+0          ; save A into ptr2
+    stz ptr2+1          ; zero ptr2+1
+                        ; x2
+    asl ptr2+0          ; shift left low byte
+    rol ptr2+1          ; rotate carry into high byte
+                        ; x4
+    asl ptr2+0          ; shift left low byte 
+    rol ptr2+1          ; rotate carry into high byte
+                        ; x8
+    asl ptr2+0          ; shift left low byte
+    rol ptr2+1          ; rotate carry into high byte
+
+    clc
+    lda ptr1+0          ; add ptr2 to ptr1
+    adc ptr2+0
+    sta ptr1+0
+    lda ptr1+1
+    adc ptr2+1
+    tax
+    lda ptr1+0          ; AX points to vdp memory address for start of block.
+    jsr vdp_set_write_address
+
+    plx                 ; restore A and X and use them to point to start of
+    pla                 ; pattern data
+    sta ptr1+0
+    stx ptr1+1
+    ldy #0              ; count out 8 bytes
+:   lda (ptr1),y        ; read byte
+    sta vdp_ram         ; write to VRAM
+    iny
+    cpy #8              ; have we written 8 bytes?
+    bne :-              ; no - loop
+    rts
+
 start:
     jsr vdp_g1_init         ; Init the VDP and set up for graphics mode.  See
                             ; lib/vdp.s for detailed description of the mode used.
@@ -92,20 +141,46 @@ start:
     sta ptr2+1
     jsr vdp_load_font_patterns
 
-    lda #$31                ; set all tile colors to RED on LIGHT GREY
-    jsr vdp_setup_colortable
+    lda #<colortable
+    ldx #>colortable
+    jsr vdp_load_colortable
+
+    lda #<I_block
+    ldx #>I_block
+    ldy #$80
+    jsr set_block_pattern
+
+    lda #<T_block
+    ldx #>T_block
+    ldy #$88
+    jsr set_block_pattern
+
+    lda #<Z_block
+    ldx #>Z_block
+    ldy #$90
+    jsr set_block_pattern
+
+    lda #<S_block
+    ldx #>S_block
+    ldy #$98
+    jsr set_block_pattern
+
+    lda #<L_block
+    ldx #>L_block
+    ldy #$A0
+    jsr set_block_pattern
+
+    lda #<J_block
+    ldx #>J_block
+    ldy #$A8
+    jsr set_block_pattern
+
+    lda #<O_block
+    ldx #>O_block
+    ldy #$B0
+    jsr set_block_pattern
 
     jsr init_music_tracker
-
-    lda #<str_tetris
-    sta ptr2+0
-    lda #>str_tetris
-    sta ptr2+1
-    ldx #26
-    ldy #23
-    jsr vdp_print_xy
-    jsr vdp_wait
-    jsr vdp_flush
 
     jsr draw_map
 
@@ -304,7 +379,8 @@ hard_drop_tet:
     bcc hard_drop_tet
     dec R3
     jsr draw_tet
-    jmp game_loop
+    jmp check_line_clear
+    ; jmp game_loop
 
 ; given a row in Y, check if each position along it's X axis is empty
 ; returns with Carry Set if row is full otherwise clear
@@ -381,8 +457,6 @@ check_line_clear:
     jsr spawn_tet
     jmp game_loop
 @row_full:
-    lda #'X'
-    jsr bios_conout
     jsr drop_lines          ; y contains line to drop to
     jmp check_line_clear
 
@@ -603,7 +677,7 @@ draw_map:
     bra @loop
 @next_line:
     clc
-    lda ptr2+0 ; add 22 on to screen pointer
+    lda ptr2+0
     adc #32
     sta ptr2+0
     lda ptr2+1
@@ -612,7 +686,7 @@ draw_map:
 
     clc
     lda ptr1+0
-    adc #13
+    adc #24
     sta ptr1+0
     lda ptr1+1
     adc #0
@@ -635,8 +709,8 @@ str_by_pd:          .asciiz "By Productiondave"
 str_cc2026:         .asciiz "2026"
 str_collision:      .byte    10,13,"COLLISION DETECTED: ",0
 str_crlf:           .byte    10,13,0
-tet_blocks:         .byte "ITZSLJO"
 speeds:             .byte 53,49,45,41,37,33,28,22,17,11,10,9,8,7,6,6,5,5,4,4,3
+
 font_start:
     .include "font.s"
 font_end:

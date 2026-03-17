@@ -52,28 +52,53 @@ rotations:
     .byte $01,$00, $00,$01, $01,$01, $00,$00
     .byte $01,$00, $00,$01, $01,$01, $00,$00
 
+I_block: ; $80 - cyan
+    .byte $FF,$C3,$A5,$99,$99,$A5,$C3,$FF
+T_block: ; $88 - magenta
+    .byte $FF,$81,$A5,$9D,$9D,$BD,$81,$FF
+Z_block: ; $90 - dark red
+    .byte $FF,$FF,$FF,$E7,$E7,$FF,$FF,$FF
+S_block: ; $98 - light green
+    .byte $FF,$FF,$C3,$C3,$C3,$C3,$FF,$FF
+L_block: ; $A0 - light red
+    .byte $FF,$81,$BD,$A5,$A5,$BD,$81,$FF
+J_block: ; $A8 - light blue
+    .byte $FF,$81,$BD,$A5,$A5,$BD,$81,$FF
+O_block: ; $B0 - light yellow
+    .byte $FF,$81,$BD,$A5,$A5,$BD,$81,$FF
+
+tet_blocks:
+    .byte $80,$88,$90,$98,$A0,$A8,$B0
+
+colortable:
+        ;  00  08  10  18  20  28  30  38  40  48  50  58  60  68  70  78 
+    .byte $E1,$E1,$E1,$E1,$E1,$E1,$E1,$E1,$E1,$E1,$E1,$E1,$E1,$E1,$E1,$E1
+        ;  80  88  90  98  a0  a8  b0  b8  c0  c8  d0  d8  e0  e8  f0  f8 
+    .byte $71,$D1,$31,$91,$81,$B1,$B1,$E1,$E1,$E1,$E1,$E1,$E1,$E1,$E1,$E1
+
 map:
-    .byte "|          |",$80
-    .byte "|          |",$80
-    .byte "+          +",$80
-    .byte "|          |",$80
-    .byte "|          |",$80
-    .byte "|          |",$80
-    .byte "|          |",$80
-    .byte "|          |",$80
-    .byte "|          |",$80
-    .byte "|          |",$80
-    .byte "|          |",$80
-    .byte "|          |",$80
-    .byte "|          |",$80
-    .byte "|          |",$80
-    .byte "|          |",$80
-    .byte "|          |",$80
-    .byte "|          |",$80
-    .byte "|          |",$80
-    .byte "|          |",$80
-    .byte "|          |",$80
-    .byte "|          |",$80
-    .byte "|          |",$80
-    .byte "+==========+",$FF
+    .byte "+          +----------+",$80
+    .byte "|          |  TETRIS  |",$80
+    .byte "+          +----------+",$80
+    .byte "|          |          |",$80
+    .byte "|          |          |",$80
+    .byte "|          |          |",$80
+    .byte "|          |          |",$80
+    .byte "|          +----------+",$80
+    .byte "|          |          |",$80
+    .byte "|          |  SCORE   |",$80
+    .byte "|          |          |",$80
+    .byte "|          |          |",$80
+    .byte "|          +----------+",$80
+    .byte "|          |          |",$80
+    .byte "|          |  LEVEL   |",$80
+    .byte "|          |          |",$80
+    .byte "|          |          |",$80
+    .byte "|          +----------+",$80
+    .byte "|          |          |",$80
+    .byte "|          |  LINES   |",$80
+    .byte "|          |          |",$80
+    .byte "|          |          |",$80
+    .byte "+==========+----------+",$80
+    .byte "productiondave     2026",$FF
 
