@@ -43,6 +43,7 @@ regs:          .res 12
 musicframectr: .res 1
 tetframectr:   .res 1
 speed:         .res 1
+seed:          .res 2
 level:         .res 1
 next_tet_regs: .res 5
 bag:           .res 1
@@ -197,9 +198,45 @@ start:
     jsr vdp_wait
     jsr vdp_flush
 
+
+    ;jmp menu
+
+; display the game start screen
+; This is also where we keep incrementing the seed every frame to generate some
+; kind of randomization to the game.
+menu:
+    stz seed
+    stz seed+1
+@menu_wait:
+    inc seed
+    bne :+
+    inc seed+1
+:   jsr bios_const
+    cmp #' '
+    bne @menu_wait
+    jsr clear_playfield
+
+    lda seed+0
+    ldx seed+1
+    jsr _srand
     jsr spawn_tet
     jsr spawn_tet           ; spawn two to make sure we don't get duplicates up front.
     jmp game_loop
+
+clear_playfield:
+    lda #' '
+    ldy #0
+@loop1:
+    ldx #PLAYFIELD_X_OFFSET
+@loop2:
+    jsr vdp_char_xy
+    inx
+    cpx #PLAYFIELD_X_OFFSET + 10
+    bne @loop2
+    iny
+    cpy #21
+    bne @loop1
+    rts
 
 ; copy next_tet regs to R0-R4.
 ; erase next tet from display
