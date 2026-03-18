@@ -29,13 +29,8 @@ R4:   .res 1
 R5:   .res 1
 R6:   .res 1
 R7:   .res 1
-R8:   .res 1
-R9:   .res 1
-R10:  .res 1
-R11:  .res 1
 
 tmp1: .res 1
-tmp2: .res 1
 
 .bss
 
@@ -43,11 +38,16 @@ regs:          .res 12
 musicframectr: .res 1
 tetframectr:   .res 1
 speed:         .res 1
+speed_idx:     .res 1
 seed:          .res 2
 level:         .res 1
 next_tet_regs: .res 5
 bag:           .res 1
 line_ctr:      .res 1
+lines:         .res 3
+level_line_ctr:.res 1 ; every 10 lines cleared rhe speed increases to a max of 20.
+level_can_update: .res 1 ; start out as zero, set to 1 when level increases to 20
+score:         .res 2
 
 .code
     ldx #$FF
@@ -183,23 +183,8 @@ start:
 
     jsr init_music_tracker
 
-    jsr draw_map
 
-    stz musicframectr
-    stz tetframectr
-    stz level
-    ldx level
-    lda speeds,x
-    sta speed
-
-    stz bag
-
-    cli                     ; ready to enable interrupts now.
-    jsr vdp_wait
-    jsr vdp_flush
-
-
-    ;jmp menu
+    ;jmp menu fall through
 
 ; display the game start screen
 ; This is also where we keep incrementing the seed every frame to generate some
@@ -207,6 +192,42 @@ start:
 menu:
     stz seed
     stz seed+1
+    stz level_can_update
+    stz line_ctr
+    stz level_line_ctr
+    stz speed_idx
+
+    stz lines+0
+    stz lines+1
+    stz lines+2
+
+    stz musicframectr
+    stz tetframectr
+
+    jsr draw_map
+
+    stz score+0
+    stz score+1
+    stz score+2
+    jsr print_score
+
+    stz bag
+
+    lda #1
+    sta level
+    ldx #PLAYFIELD_X_OFFSET+16
+    ldy #16
+    jsr byte_to_hex
+
+    ldx level
+    lda speeds,x
+    sta speed
+
+
+    cli                     ; ready to enable interrupts now.
+    jsr vdp_wait
+    jsr vdp_flush
+
 @menu_wait:
     inc seed
     bne :+
@@ -221,6 +242,7 @@ menu:
     jsr _srand
     jsr spawn_tet
     jsr spawn_tet           ; spawn two to make sure we don't get duplicates up front.
+
     jmp game_loop
 
 clear_playfield:
@@ -483,6 +505,7 @@ check_line_clear:
     ; update score according to total number of lines cleared.
     ; finally spawn new tet
     stz line_ctr
+@again:
     ldy #21
 @next_line:
     jsr check_line
@@ -490,12 +513,72 @@ check_line_clear:
     dey
     cpy #2
     bne @next_line
+@break:
+    sei
+    sed
+    clc
 
+    lda line_ctr
+    adc lines+0
+    sta lines+0
+    lda lines+1
+    adc #0
+    sta lines+1
+    lda lines+2
+    adc #0
+    sta lines+2
+    cld
+    cli
+    jsr print_lines
+    jsr update_score
     jsr spawn_tet
     jmp game_loop
 @row_full:
     jsr drop_lines          ; y contains line to drop to
-    jmp check_line_clear
+
+    lda level_can_update
+    bne :+
+
+    inc level_line_ctr
+    lda level_line_ctr
+    cmp #10
+    bne :+
+
+    jsr increment_level
+    stz level_line_ctr
+
+    lda level
+:   inc line_ctr            ; we collect the lines that have been cleared.
+    lda line_ctr
+    cmp #4                  ; 4 is the maximum number of lines we can clear with
+    beq @break              ; one piece.
+    bra @again              ; if we cleared a row and dropped the lines, we need
+                            ; to start checking from th bottom again.
+
+increment_level:
+    sei
+    sed
+    clc
+    lda level
+    adc #1
+    sta level
+
+    cmp #20
+    bne :+
+    inc level_can_update
+:   cld
+    cli
+
+    lda level
+    ldx #PLAYFIELD_X_OFFSET+16
+    ldy #16
+    jsr byte_to_hex
+
+    inc speed_idx
+    ldx speed_idx
+    lda speeds,x
+    sta speed
+    rts
 
 ; given the new x and y position: we look at the
 ; collision map and test if each block in the new location is clear.
@@ -665,7 +748,7 @@ draw_tet:
 save_regs:
     pha
     phx
-    ldx #11
+    ldx #7
 @loop:
     lda R0,x
     sta regs,x
@@ -678,7 +761,7 @@ save_regs:
 restore_regs:
     pha
     phx
-    ldx #11
+    ldx #7
 @loop:
     lda regs,x
     sta R0,x
@@ -733,6 +816,112 @@ draw_map:
 @done:
     rts
 
+; scoring system from: https://harddrop.com/wiki/Scoring#Guideline_scoring_system
+; Note that this game does not have the Super Rotation System so the additional scores
+; for those moves are excluded here.
+; Single    100 x level
+; Double    300 x level
+; Triple    500 x level
+; Tetris    800 x level
+; We use a lookup table to calculate the level multiplier.
+; lookup table is values stored in BCD format.
+update_score:
+    ; we will use ptr2 to hold the mid and high values of the BCD encoded score.
+    ldx level
+    lda line_ctr
+    cmp #1
+    bne :+
+    lda single_mid,x
+    sta ptr2+0
+    lda single_high,x
+    sta ptr2+1
+    bra @add_to_score
+:   cmp #2
+    bne :+
+    lda double_mid,x
+    sta ptr2+0
+    lda double_high,x
+    sta ptr2+1
+    bra @add_to_score
+:   cmp #3
+    bne :+
+    lda triple_mid,x
+    sta ptr2+0
+    lda triple_high,x
+    sta ptr2+1
+    bra @add_to_score
+:   cmp #4
+    bne :+
+    lda tetris_mid,x
+    sta ptr2+0
+    lda tetris_high,x
+    sta ptr2+1
+    bra @add_to_score
+:   rts
+@add_to_score:
+    sei               ; disable interrupts during cld maths
+    sed               ; set BCD flag
+    clc
+    lda score+0
+    adc ptr2+0
+    sta score+0
+    lda score+1
+    adc ptr2+1
+    sta score+1
+    cld               ; clear BCD flag
+    cli
+    ; fall through to print
+print_score:
+    lda #0
+    ldx #PLAYFIELD_X_OFFSET+16
+    ldy #11
+    jsr byte_to_hex
+
+    lda score+0
+    beq :+
+    ldx #PLAYFIELD_X_OFFSET+14
+    ldy #11
+    jsr byte_to_hex
+:   lda score+1
+    beq :+
+    ldx #PLAYFIELD_X_OFFSET+12
+    ldy #11
+    jmp byte_to_hex
+:   rts
+
+print_lines:
+    lda lines+0
+    ldx #PLAYFIELD_X_OFFSET+16
+    ldy #21
+    jsr byte_to_hex
+    lda lines+1
+    bne :+
+    ldx #PLAYFIELD_X_OFFSET+14
+    ldy #21
+    jsr byte_to_hex
+:   lda lines+2
+    bne :+
+    ldx #PLAYFIELD_X_OFFSET+12
+    ldy #21
+    jsr byte_to_hex
+:   rts
+
+byte_to_hex:
+    pha             ;Save A for LSD.
+    lsr
+    lsr
+    lsr             ;MSD to LSD position.
+    lsr
+    jsr prhex       ;Output hex digit.
+    inx 
+    pla             ;Restore A.
+prhex:
+    and #$0F        ;Mask LSD for hex print.
+    ora #$B0        ;Add "0".
+echo:
+    and #$7F        ;*Change to "standard ASCII"
+    jsr vdp_char_xy
+    rts
 
 exit:
     jsr sn_silence
