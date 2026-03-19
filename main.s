@@ -34,20 +34,20 @@ tmp1: .res 1
 
 .bss
 
-regs:          .res 12
-musicframectr: .res 1
-tetframectr:   .res 1
-speed:         .res 1
-speed_idx:     .res 1
-seed:          .res 2
-level:         .res 1
-next_tet_regs: .res 5
-bag:           .res 1
-line_ctr:      .res 1
-lines:         .res 3
-level_line_ctr:.res 1 ; every 10 lines cleared rhe speed increases to a max of 20.
-level_can_update: .res 1 ; start out as zero, set to 1 when level increases to 20
-score:         .res 2
+regs:             .res 12
+musicframectr:    .res 1
+tetframectr:      .res 1
+speed:            .res 1
+speed_idx:        .res 1
+seed:             .res 2
+level:            .res 1
+next_tet_regs:    .res 5
+bag:              .res 1
+line_ctr:         .res 1
+lines:            .res 3
+level_line_ctr:   .res 1     ; every 10 lines cleared rhe speed increases to a max of 20.
+level_can_update: .res 1     ; start out as zero, set to 1 when level increases to 20
+score:            .res 2
 
 .code
     ldx #$FF
@@ -83,56 +83,56 @@ dump_regs:
 ; Y is the value in the name table for this block.  EG: $20 would be SPACE on a
 ; regular font.
 set_block_pattern:
-    pha                 ; save A and X so we can set the vdp write address
+    pha                      ; save A and X so we can set the vdp write address
     phx
 
-    lda #<PATTERNTABLE  ; vdp write address + (Y * 8)
+    lda #<PATTERNTABLE       ; vdp write address + (Y * 8)
     sta ptr1+0
     lda #>PATTERNTABLE
     sta ptr1+1
 
     tya
     clc
-    ; multiply A by 8 into a 16 bit memory ptr2
-    sta ptr2+0          ; save A into ptr2
-    stz ptr2+1          ; zero ptr2+1
-                        ; x2
-    asl ptr2+0          ; shift left low byte
-    rol ptr2+1          ; rotate carry into high byte
-                        ; x4
-    asl ptr2+0          ; shift left low byte 
-    rol ptr2+1          ; rotate carry into high byte
-                        ; x8
-    asl ptr2+0          ; shift left low byte
-    rol ptr2+1          ; rotate carry into high byte
+; multiply A by 8 into a 16 bit memory ptr2
+    sta ptr2+0               ; save A into ptr2
+    stz ptr2+1               ; zero ptr2+1
+; x2
+    asl ptr2+0               ; shift left low byte
+    rol ptr2+1               ; rotate carry into high byte
+; x4
+    asl ptr2+0               ; shift left low byte 
+    rol ptr2+1               ; rotate carry into high byte
+; x8
+    asl ptr2+0               ; shift left low byte
+    rol ptr2+1               ; rotate carry into high byte
 
     clc
-    lda ptr1+0          ; add ptr2 to ptr1
+    lda ptr1+0               ; add ptr2 to ptr1
     adc ptr2+0
     sta ptr1+0
     lda ptr1+1
     adc ptr2+1
     tax
-    lda ptr1+0          ; AX points to vdp memory address for start of block.
+    lda ptr1+0               ; AX points to vdp memory address for start of block.
     jsr vdp_set_write_address
 
-    plx                 ; restore A and X and use them to point to start of
-    pla                 ; pattern data
+    plx                      ; restore A and X and use them to point to start of
+    pla                      ; pattern data
     sta ptr1+0
     stx ptr1+1
-    ldy #0              ; count out 8 bytes
-:   lda (ptr1),y        ; read byte
-    sta vdp_ram         ; write to VRAM
+    ldy #0                   ; count out 8 bytes
+:   lda (ptr1),y             ; read byte
+    sta vdp_ram              ; write to VRAM
     iny
-    cpy #8              ; have we written 8 bytes?
-    bne :-              ; no - loop
+    cpy #8                   ; have we written 8 bytes?
+    bne :-                   ; no - loop
     rts
 
 start:
-    jsr vdp_g1_init         ; Init the VDP and set up for graphics mode.  See
-                            ; lib/vdp.s for detailed description of the mode used.
+    jsr vdp_g1_init          ; Init the VDP and set up for graphics mode.  See
+; lib/vdp.s for detailed description of the mode used.
 
-    lda #<font_start        ; load tile data (font and tiles)
+    lda #<font_start         ; load tile data (font and tiles)
     sta ptr1+0
     lda #>font_start
     sta ptr1+1
@@ -182,9 +182,11 @@ start:
     jsr set_block_pattern
 
     jsr init_music_tracker
+    jsr draw_map
+    jsr vdp_wait
+    jsr vdp_flush
 
-
-    ;jmp menu fall through
+;jmp menu fall through
 
 ; display the game start screen
 ; This is also where we keep incrementing the seed every frame to generate some
@@ -204,7 +206,27 @@ menu:
     stz musicframectr
     stz tetframectr
 
-    jsr draw_map
+    ldx speed_idx
+    lda speeds,x
+    sta speed
+
+    cli                      ; ready to enable interrupts now.
+    jsr vdp_wait
+    jsr vdp_flush
+
+@menu_wait:
+    inc seed
+    bne :+
+    inc seed+1
+:   jsr bios_const
+    cmp #' '
+    bne :+
+    bra @menu_play
+:   cmp #$1B
+    bne @menu_wait
+    jmp exit
+@menu_play:
+    jsr clear_playfield
 
     stz score+0
     stz score+1
@@ -219,29 +241,15 @@ menu:
     ldy #16
     jsr byte_to_hex
 
-    ldx speed_idx
-    lda speeds,x
-    sta speed
-
-
-    cli                     ; ready to enable interrupts now.
-    jsr vdp_wait
-    jsr vdp_flush
-
-@menu_wait:
-    inc seed
-    bne :+
-    inc seed+1
-:   jsr bios_const
-    cmp #' '
-    bne @menu_wait
-    jsr clear_playfield
-
     lda seed+0
     ldx seed+1
     jsr _srand
+
     jsr spawn_tet
-    jsr spawn_tet           ; spawn two to make sure we don't get duplicates up front.
+    jsr spawn_tet            ; spawn two to make sure we don't get duplicates up front.
+
+    jsr vdp_wait
+    jsr vdp_flush
 
     jmp game_loop
 
@@ -256,7 +264,7 @@ clear_playfield:
     cpx #PLAYFIELD_X_OFFSET + 10
     bne @loop2
     iny
-    cpy #21
+    cpy #22
     bne @loop1
     rts
 
@@ -278,7 +286,7 @@ spawn_tet:
     dex
     bpl :-
 
-    ; make new next tet
+; make new next tet
     stz next_tet_regs + 0    ; rotation
     jsr bag_of_7             ; get next tet
     sta next_tet_regs + 1    ; tet id
@@ -299,39 +307,39 @@ bag_of_7:
     lda bag
     cmp #$7F
     bne @try_again
-    stz bag                 ; bag was full, so empty it.
+    stz bag                  ; bag was full, so empty it.
 @try_again:
     jsr _rand
     and #$07
     cmp #7
-    bcs @try_again          ; keep searching for a number between 0 and 6 inclusive
+    bcs @try_again           ; keep searching for a number between 0 and 6 inclusive
 
-    ; we have a number between 0 and 6 (inclusive)
-    sta R6                  ; save to temp var
-    tax                     ; rotate carry left by number of times given by rand
+; we have a number between 0 and 6 (inclusive)
+    sta R6                   ; save to temp var
+    tax                      ; rotate carry left by number of times given by rand
     inx
     lda #0
     sec
 :   rol
     dex
     bne :-
-    sta R7                  ; save this in case we want to OR it with bag
-    and bag                 ; test if the bit is already set in bag.
-    bne @try_again          ; bit is set so try again.  we know there is room.
-    ; bit is not set so set it.
+    sta R7                   ; save this in case we want to OR it with bag
+    and bag                  ; test if the bit is already set in bag.
+    bne @try_again           ; bit is set so try again.  we know there is room.
+; bit is not set so set it.
     lda R7
-    ora bag                 ; set new bit in 
+    ora bag                  ; set new bit in 
     sta bag
-    lda R6                  ; restore number from temp
+    lda R6                   ; restore number from temp
     rts
 
 ; Game loop
 game_loop:
-    stz R5              ; moving down flag false.  used in collision detection
-    jsr save_regs       ; we only want to lock a piece if we were moving down.
+    stz R5                   ; moving down flag false.  used in collision detection
+    jsr save_regs            ; we only want to lock a piece if we were moving down.
     lda #' '
     sta R4
-    jsr draw_tet        ; first we draw the tet as being empty (spaces)
+    jsr draw_tet             ; first we draw the tet as being empty (spaces)
     ldx R1
     lda tet_blocks,x
     sta R4
@@ -352,7 +360,7 @@ game_loop:
 :   cmp #' '
     bne :+
     jmp @hard_drop_tet
-:   cmp #'q'
+:   cmp #$1B
     beq :+
     jmp @draw_tet
 :   jmp exit
@@ -363,28 +371,28 @@ game_loop:
     inc R2
     bra @draw_tet
 @rotate_tet_cw:
-    lda R0          ; rotate
+    lda R0                   ; rotate
     inc 
     and #$03
     sta R0
     bra @draw_tet
 @rotate_tet_ccw:
-    lda R0          ; rotate
+    lda R0                   ; rotate
     dec 
     and #$03
     sta R0
     bra @draw_tet
-    ;jmp @draw_tet ; fall through
+;jmp @draw_tet           ; fall through
 @hard_drop_tet:
     jmp hard_drop_tet
 @draw_tet:
-    ; check if it's time to move the piece down one line.
+; check if it's time to move the piece down one line.
     lda tetframectr
     cmp speed
     bne @draw
     stz tetframectr
     inc R3
-    inc R5          ; moving down flag TRUE
+    inc R5                   ; moving down flag TRUE
 
 @draw:
 
@@ -393,19 +401,26 @@ game_loop:
     cmp #PIECE_COLLISION
     beq @is_top_row
     cmp #FLOOR_COLLISION
-    bne @restore            ; not floor collision, restore old position and draw
+    bne @restore             ; not floor collision, restore old position and draw
     bra @lock_piece
 @is_top_row:
     lda R3
-    dec                     ; we had already moved it so need to test where we were
+    dec                      ; we had already moved it so need to test where we were
     cmp #1
     bne @lock_piece
-    jmp exit                ; TODO: DO A PROPER GAME OVER SEQUENCE
+    lda #<str_game_over
+    sta ptr2+0
+    lda #>str_game_over
+    sta ptr2+1
+    ldx #PLAYFIELD_X_OFFSET + 1
+    ldy #0
+    jsr vdp_print_xy
+    jmp menu
 @lock_piece:
     lda R5
-    beq @restore            ; were we moving down? YES then lock piece
+    beq @restore             ; were we moving down? YES then lock piece
     jsr restore_regs
-    jsr draw_tet            ; draw in previous place
+    jsr draw_tet             ; draw in previous place
     jsr vdp_wait
     jsr vdp_flush
     jmp check_line_clear
@@ -439,7 +454,7 @@ hard_drop_tet:
     dec R3
     jsr draw_tet
     jmp check_line_clear
-    ; jmp game_loop
+; jmp game_loop
 
 ; given a row in Y, check if each position along it's X axis is empty
 ; returns with Carry Set if row is full otherwise clear
@@ -455,7 +470,7 @@ check_line:
     inx
     cpx #PLAYFIELD_X_OFFSET+10
     bne :-
-    ; row is full
+; row is full
     sec
     rts
 @row_not_full:
@@ -466,7 +481,7 @@ check_line:
 
 ; drop lines down to current line given by Y
 drop_lines:
-    sty R6            ; save it in temp var
+    sty R6                   ; save it in temp var
 @line_loop:
     ldx #PLAYFIELD_X_OFFSET
 @column_loop:
@@ -488,22 +503,22 @@ drop_lines:
     inx
     cpx #PLAYFIELD_X_OFFSET+10
     bne @clear_top_row_loop
-    ldy R6          ; restore Y
+    ldy R6                   ; restore Y
     rts
 
 check_line_clear:
-    ; zero line counter
-    ; loop through the rows starting at the bottom.
-    ;   check the playfield for a tile at each horizontal position along the line
-    ;     if empty, then next line
-    ;   if all not empty, then:
-    ;     increment line counter
-    ;     add empty row at top of playfield
-    ;     move all rows in playfield down by one row. (overwriting cleared line)
-    ;   if line counter = 3 (max 4 lines from 0 - 3) then end loop.
-    ;
-    ; update score according to total number of lines cleared.
-    ; finally spawn new tet
+; zero line counter
+; loop through the rows starting at the bottom.
+;   check the playfield for a tile at each horizontal position along the line
+;     if empty, then next line
+;   if all not empty, then:
+;     increment line counter
+;     add empty row at top of playfield
+;     move all rows in playfield down by one row. (overwriting cleared line)
+;   if line counter = 3 (max 4 lines from 0 - 3) then end loop.
+;
+; update score according to total number of lines cleared.
+; finally spawn new tet
     stz line_ctr
 @again:
     ldy #21
@@ -534,7 +549,7 @@ check_line_clear:
     jsr spawn_tet
     jmp game_loop
 @row_full:
-    jsr drop_lines          ; y contains line to drop to
+    jsr drop_lines           ; y contains line to drop to
 
     lda level_can_update
     bne :+
@@ -547,12 +562,12 @@ check_line_clear:
     jsr increment_level
     stz level_line_ctr
 
-:   inc line_ctr            ; we collect the lines that have been cleared.
+:   inc line_ctr             ; we collect the lines that have been cleared.
     lda line_ctr
-    cmp #4                  ; 4 is the maximum number of lines we can clear with
-    beq @break              ; one piece.
-    bra @again              ; if we cleared a row and dropped the lines, we need
-                            ; to start checking from th bottom again.
+    cmp #4                   ; 4 is the maximum number of lines we can clear with
+    beq @break               ; one piece.
+    bra @again               ; if we cleared a row and dropped the lines, we need
+; to start checking from th bottom again.
 
 increment_level:
     sei
@@ -584,7 +599,7 @@ increment_level:
 ; return carry SET with collide condition status in A.  Or carry clear to indicate 
 ; no collision.
 tile_test_collision:
-    ; bounds checking
+; bounds checking
     txa
     cmp #PLAYFIELD_X_OFFSET
     bcc @left_collision_detected
@@ -598,7 +613,7 @@ tile_test_collision:
     cmp #' '
     bne @collision_detected
     lda #0
-    clc                     ; no collision detected
+    clc                      ; no collision detected
     rts
 @floor_collision_detected:
     lda #FLOOR_COLLISION
@@ -621,26 +636,26 @@ tile_test_collision:
 ; offset and return it in Y
 calculate_rotation_offset_next_tet:
     lda next_tet_regs + 1
-    mul32   ; tet id x 32
-    sta tmp1; save to tmp
-    lda next_tet_regs + 0  ; rotation
-    mul8    ; offset by rot x 8
-    clc     ; add to tmp
+    mul32                    ; tet id x 32
+    sta tmp1                 ; save to tmp
+    lda next_tet_regs + 0    ; rotation
+    mul8                     ; offset by rot x 8
+    clc                      ; add to tmp
     adc tmp1
-    tay     ; Y = tet_id * 32 + rotation * 8 - this is the offset into rotations
+    tay                      ; Y = tet_id * 32 + rotation * 8 - this is the offset into rotations
     rts
 
 ; given the tet id in A and the rotation in R0, we calculate the rotation data
 ; offset and return it in Y
 calculate_rotation_offset:
     lda R1
-    mul32   ; tet id x 32
-    sta tmp1; save to tmp
-    lda R0  ; rotation
-    mul8    ; offset by rot x 8
-    clc     ; add to tmp
+    mul32                    ; tet id x 32
+    sta tmp1                 ; save to tmp
+    lda R0                   ; rotation
+    mul8                     ; offset by rot x 8
+    clc                      ; add to tmp
     adc tmp1
-    tay     ; Y = tet_id * 32 + rotation * 8 - this is the offset into rotations
+    tay                      ; Y = tet_id * 32 + rotation * 8 - this is the offset into rotations
     rts
 
 ; given X in next_tet_regs+2 and Y in next_tet_regs+3, and rotation offset in
@@ -648,12 +663,12 @@ calculate_rotation_offset:
 calculate_xy_from_rotations_next_tet:
     lda rotations,y
     clc
-    adc #20   ; x
+    adc #20                  ; x
     tax
-    iny       ; next value is Y offset
+    iny                      ; next value is Y offset
     lda rotations,y
     clc
-    adc #4    ; y
+    adc #4                   ; y
     tay
     rts
 
@@ -663,17 +678,17 @@ calculate_xy_from_rotations_next_tet:
 calculate_xy_from_rotations:
     lda rotations,y
     clc
-    adc R2  ; add to X
+    adc R2                   ; add to X
     tax
-    iny     ; next value is Y offset
+    iny                      ; next value is Y offset
     lda rotations,y
     clc
-    adc R3  ; add to Y
+    adc R3                   ; add to Y
     tay
     rts
 
 test_tet_collision:
-    ; first test all positions of the tiles for collisions and out of bounds
+; first test all positions of the tiles for collisions and out of bounds
     jsr calculate_rotation_offset
     ldx #4
 @collision_loop:
@@ -721,26 +736,26 @@ draw_next_tet:
 ; USES : R0-R4
 draw_tet:
     lda R4
-    cmp #' '  ; do not test for collision if erasing tet
+    cmp #' '                 ; do not test for collision if erasing tet
     beq :+
     jsr test_tet_collision
     bcc :+
     rts
-:   ; if we get here it means we are safe to draw in new location.
+:                            ; if we get here it means we are safe to draw in new location.
     jsr calculate_rotation_offset
     ldx #4
 @loop:
-    phx     ; save block counter
-    phy     ; save offset
+    phx                      ; save block counter
+    phy                      ; save offset
     jsr calculate_xy_from_rotations
-    lda R4  ; tet tile
+    lda R4                   ; tet tile
     jsr vdp_char_xy
-    ply     ; restore offset
-    iny     ; increment offset for next block
-    iny     ;
-    plx     ; restore block counter
-    dex     ; decrement
-    bne @loop ; loop if not finished.
+    ply                      ; restore offset
+    iny                      ; increment offset for next block
+    iny
+    plx                      ; restore block counter
+    dex                      ; decrement
+    bne @loop                ; loop if not finished.
     clc
     rts
 
@@ -810,7 +825,7 @@ draw_map:
     lda ptr1+1
     adc #0
     sta ptr1+1
-    ldy #0    ; reset y to 0
+    ldy #0                   ; reset y to 0
     bra @loop
 @done:
     rts
@@ -825,7 +840,7 @@ draw_map:
 ; We use a lookup table to calculate the level multiplier.
 ; lookup table is values stored in BCD format.
 update_score:
-    ; we will use ptr2 to hold the mid and high values of the BCD encoded score.
+; we will use ptr2 to hold the mid and high values of the BCD encoded score.
     ldx level
     lda line_ctr
     cmp #1
@@ -858,8 +873,8 @@ update_score:
     bra @add_to_score
 :   rts
 @add_to_score:
-    sei               ; disable interrupts during cld maths
-    sed               ; set BCD flag
+    sei                      ; disable interrupts during cld maths
+    sed                      ; set BCD flag
     clc
     lda score+0
     adc ptr2+0
@@ -867,9 +882,9 @@ update_score:
     lda score+1
     adc ptr2+1
     sta score+1
-    cld               ; clear BCD flag
+    cld                      ; clear BCD flag
     cli
-    ; fall through to print
+; fall through to print
 print_score:
     lda #0
     ldx #PLAYFIELD_X_OFFSET+16
@@ -906,19 +921,19 @@ print_lines:
 :   rts
 
 byte_to_hex:
-    pha             ;Save A for LSD.
+    pha                      ; Save A for LSD.
     lsr
     lsr
-    lsr             ;MSD to LSD position.
+    lsr                      ; MSD to LSD position.
     lsr
-    jsr prhex       ;Output hex digit.
+    jsr prhex                ; Output hex digit.
     inx 
-    pla             ;Restore A.
+    pla                      ; Restore A.
 prhex:
-    and #$0F        ;Mask LSD for hex print.
-    ora #$B0        ;Add "0".
+    and #$0F                 ; Mask LSD for hex print.
+    ora #$B0                 ; Add "0".
 echo:
-    and #$7F        ;*Change to "standard ASCII"
+    and #$7F                 ; *Change to "standard ASCII"
     jsr vdp_char_xy
     rts
 
@@ -927,12 +942,7 @@ exit:
     jmp bios_wboot
 
 .rodata
-; strings
-str_space_to_start: .asciiz "UART: SPACE to start"
-str_tetris:         .asciiz "Tetris"
-str_by_pd:          .asciiz "By Productiondave"
-str_cc2026:         .asciiz "2026"
-str_collision:      .byte    10,13,"COLLISION DETECTED: ",0
+str_game_over:      .byte "GAMEOVER",0
 str_crlf:           .byte    10,13,0
 speeds:             .byte 53,49,45,41,37,33,28,22,17,11,10,9,8,7,6,6,5,5,4,4,3
 
