@@ -219,7 +219,7 @@ menu:
     ldy #16
     jsr byte_to_hex
 
-    ldx level
+    ldx speed_idx
     lda speeds,x
     sta speed
 
@@ -547,7 +547,6 @@ check_line_clear:
     jsr increment_level
     stz level_line_ctr
 
-    lda level
 :   inc line_ctr            ; we collect the lines that have been cleared.
     lda line_ctr
     cmp #4                  ; 4 is the maximum number of lines we can clear with
