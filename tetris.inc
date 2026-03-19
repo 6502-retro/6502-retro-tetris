@@ -77,29 +77,29 @@ colortable:
     .byte $71,$D1,$31,$91,$81,$B1,$B1,$E1,$E1,$E1,$E1,$E1,$E1,$E1,$E1,$E1
 
 map:
-    .byte "+          +----------+",$80
-    .byte "|          |  TETRIS  |",$80
-    .byte "+          +----------+",$80
-    .byte "|          |          |",$80
-    .byte "|          |          |",$80
-    .byte "|          |          |",$80
-    .byte "|          |          |",$80
-    .byte "|          +----------+",$80
-    .byte "|  START   |          |",$80
-    .byte "| [SPACE]  |  SCORE   |",$80
-    .byte "|          |          |",$80
-    .byte "|  EXIT!   |          |",$80
-    .byte "| [ ESC ]  +----------+",$80
-    .byte "|          |          |",$80
-    .byte "|          |  LEVEL   |",$80
-    .byte "|          |          |",$80
-    .byte "|          |          |",$80
-    .byte "|          +----------+",$80
-    .byte "|          |          |",$80
-    .byte "|          |  LINES   |",$80
-    .byte "|          |          |",$80
-    .byte "|          |          |",$80
-    .byte "+==========+----------+",$80
+    .byte $bf,"          ",$bf,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$c0,$80
+    .byte $b8,"          ",$b8,"  TETRIS  ",                           $b8,$80
+    .byte $bb,"          ",$ba,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$bc,$80
+    .byte $b8,"          ",$b8,"          ",                           $b8,$80
+    .byte $b8,"          ",$b8,"          ",                           $b8,$80
+    .byte $b8,"          ",$b8,"          ",                           $b8,$80
+    .byte $b8,"          ",$b8,"          ",                           $b8,$80
+    .byte $b8,"          ",$bb,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$bc,$80
+    .byte $b8,"  START   ",$b8,"          ",                           $b8,$80
+    .byte $b8," [SPACE]  ",$b8,"   SCORE  ",                           $b8,$80
+    .byte $b8,"          ",$b8,"          ",                           $b8,$80
+    .byte $b8,"  EXIT!   ",$b8,"          ",                           $b8,$80
+    .byte $b8," [ ESC ]  ",$bb,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$bc,$80
+    .byte $b8,"          ",$b8,"          ",                           $b8,$80
+    .byte $b8,"          ",$b8,"   LEVEL  ",                           $b8,$80
+    .byte $b8,"          ",$b8,"          ",                           $b8,$80
+    .byte $b8,"          ",$b8,"          ",                           $b8,$80
+    .byte $b8,"          ",$bb,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$bc,$80
+    .byte $b8,"          ",$b8,"          ",                           $b8,$80
+    .byte $b8,"          ",$b8,"   LINES  ",                           $b8,$80
+    .byte $b8,"          ",$b8,"          ",                           $b8,$80
+    .byte $b8,"          ",$b8,"          ",                           $b8,$80
+    .byte $c1,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$be,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$c2,$80
     .byte "productiondave     2026",$FF
 
 ; --- SINGLE (100 * Level) ---
@@ -118,4 +118,39 @@ triple_high: .byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$
 tetris_mid:  .byte $00,$08,$16,$24,$32,$40,$48,$56,$64,$72,$80,$88,$96,$04,$12,$20,$28,$36,$44,$52,$60
 tetris_high: .byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$01,$01,$01,$01,$01,$01,$01,$01
 
+; --- Border tiles ---
+
+; $B8 - VERTICAL LINE
+bdr_vert_line:
+    .byte $18,$18,$18,$18,$18,$18,$18,$18
+; $B9- HORIZONTAL LINE
+bdr_hori_line:
+    .byte $00,$00,$00,$ff,$ff,$00,$00,$00
+; $BA - CROSS
+bdr_cross:
+    .byte $18,$18,$18,$ff,$ff,$18,$18,$18
+; $BB - RIGHT T
+bdr_right_t:
+    .byte $18,$18,$18,$1f,$1f,$18,$18,$18
+; $BC - LEFT T
+bdr_left_t:
+    .byte $18,$18,$18,$f8,$f8,$18,$18,$18
+; $BD - BOTTOM T (regular T shape)
+bdr_bottom_t:
+    .byte $00,$00,$00,$ff,$ff,$18,$18,$18
+; $BE - TOP T (upside down T shape)
+bdr_top_t:
+    .byte $18,$18,$18,$ff,$ff,$00,$00,$00
+; $BF - TOP LEFT CNR
+bdr_top_left_cnr:
+    .byte $00,$00,$00,$1f,$1f,$18,$18,$18
+; $C0 - TOP RIGHT CNR
+bdr_top_right_cnr:
+    .byte $00,$00,$00,$f8,$f8,$18,$18,$18
+; $C1 - BOTTOM LEFT CNR
+bdr_bottom_left_cnr:
+    .byte $18,$18,$18,$1f,$1f,$00,$00,$00
+; $C2 - BOTTOM RIGHT CNR
+bdr_bottom_right_cnr:
+    .byte $18,$18,$18,$f8,$f8,$00,$00,$00
 

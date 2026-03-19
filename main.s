@@ -181,6 +181,27 @@ start:
     ldy #$B0
     jsr set_block_pattern
 
+    clc
+    lda #<PATTERNTABLE        ; set pattern table to position of $b8 in name table
+    adc #$c0                  ; 0xb8 * 8 = 0x5c0
+    tay
+    lda #>PATTERNTABLE
+    adc #$5
+    tax
+    tya
+    jsr vdp_set_write_address
+
+    ldy #0
+    lda #<bdr_vert_line
+    sta ptr1+0
+    lda #>bdr_vert_line
+    sta ptr1+1
+:   lda (ptr1),y
+    sta vdp_ram
+    iny                       ; copy 88 bytes into vram
+    cpy #88
+    bne :-
+
     jsr init_music_tracker
     jsr draw_map
     jsr vdp_wait
@@ -584,7 +605,7 @@ increment_level:
     cli
 
     lda level
-    ldx #PLAYFIELD_X_OFFSET+16
+    ldx #PLAYFIELD_X_OFFSET+17
     ldy #16
     jsr byte_to_hex
 
@@ -887,35 +908,35 @@ update_score:
 ; fall through to print
 print_score:
     lda #0
-    ldx #PLAYFIELD_X_OFFSET+16
+    ldx #PLAYFIELD_X_OFFSET+17
     ldy #11
     jsr byte_to_hex
 
     lda score+0
     beq :+
-    ldx #PLAYFIELD_X_OFFSET+14
+    ldx #PLAYFIELD_X_OFFSET+15
     ldy #11
     jsr byte_to_hex
 :   lda score+1
     beq :+
-    ldx #PLAYFIELD_X_OFFSET+12
+    ldx #PLAYFIELD_X_OFFSET+13
     ldy #11
     jmp byte_to_hex
 :   rts
 
 print_lines:
     lda lines+0
-    ldx #PLAYFIELD_X_OFFSET+16
+    ldx #PLAYFIELD_X_OFFSET+17
     ldy #21
     jsr byte_to_hex
     lda lines+1
     bne :+
-    ldx #PLAYFIELD_X_OFFSET+14
+    ldx #PLAYFIELD_X_OFFSET+15
     ldy #21
     jsr byte_to_hex
 :   lda lines+2
     bne :+
-    ldx #PLAYFIELD_X_OFFSET+12
+    ldx #PLAYFIELD_X_OFFSET+13
     ldy #21
     jsr byte_to_hex
 :   rts
