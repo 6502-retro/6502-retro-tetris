@@ -154,3 +154,15 @@ bdr_bottom_left_cnr:
 bdr_bottom_right_cnr:
     .byte $18,$18,$18,$f8,$f8,$00,$00,$00
 
+
+; LINE WIPERs
+sprite_patterns:
+    .repeat 32
+        .byte $0
+    .endrepeat
+spr_wipe:
+    .byte $00,$00,$00,$00,$03,$1f,$7f,$ff
+    .byte $ff,$7f,$1f,$03,$00,$00,$00,$00
+    .byte $00,$00,$00,$fc,$fe,$ff,$ff,$ff
+    .byte $ff,$ff,$ff,$fe,$fc,$00,$00,$00
+sprite_patterns_end:

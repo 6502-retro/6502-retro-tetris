@@ -210,6 +210,8 @@ vdp_wait:
 ; INPUT: VOID
 ; OUTPUT: VOID
 vdp_flush:
+    phx
+    phy
     lda #<NAMETABLE         ; prep XA fo the call to vpd_set_write address.
     ldx #>NAMETABLE
     jsr vdp_set_write_address
@@ -225,6 +227,8 @@ vdp_flush:
     inc ptr1+1              ; increment the high byte of the framebuffer
     dex                     ; pointer.
     bne :-                  ; decement the page counter and loop until 0.
+    ply
+    plx
     rts
 
 ; Copy the color table pointed to by XY into the VDP memory.
@@ -365,6 +369,8 @@ init_sprite_attributes:
 ; INPUT: ptr1 is a pointer to the sprite attributes data in regular RAM.
 ; OUTPUT: VOID
 vdp_flush_sprite_attributes:
+    phx
+    phy
     lda #<SPRITEATTRIBUTETABLE
     ldx #>SPRITEATTRIBUTETABLE
     jsr vdp_set_write_address
@@ -378,6 +384,8 @@ vdp_flush_sprite_attributes:
     iny
     bpl @L1
 @EXIT:
+    ply
+    plx
     rts
 
 
@@ -385,7 +393,7 @@ vdp_flush_sprite_attributes:
 ; These are the registers for the G2 mode with G1 like nametable arrangement as
 ; described at the beginning of this library.
 g1_regs:
-    .byte $00                   ; Graphics mode II, no external video
+    .byte $00                   ; Graphics mode I, no external video
     .byte $e2                   ; 16Kb VRAM, enable display, enable interrupts, 16x16 sprites, magnification off.
     .byte $05                   ; Name table address = 0x1400
     .byte $80                   ; Color table address = 0x2000

@@ -49,6 +49,13 @@ level_line_ctr:   .res 1     ; every 10 lines cleared rhe speed increases to a m
 level_can_update: .res 1     ; start out as zero, set to 1 when level increases to 20
 score:            .res 2
 
+sprite_attributes:
+sprite_wipe_y:    .res 1
+sprite_wipe_x:    .res 1
+sprite_wipe_p:    .res 1
+sprite_wipe_c:    .res 1
+sprite_attr_term: .res 1
+
 .code
     ldx #$FF
     txs
@@ -142,6 +149,16 @@ start:
     sta ptr2+1
     jsr vdp_load_font_patterns
 
+    lda #<sprite_patterns
+    sta ptr1+0
+    lda #>sprite_patterns
+    sta ptr1+1
+    lda #<sprite_patterns_end
+    sta ptr2+0
+    lda #>sprite_patterns_end
+    sta ptr2+1
+    jsr vdp_load_sprite_patterns
+
     lda #<colortable
     ldx #>colortable
     jsr vdp_load_colortable
@@ -201,6 +218,18 @@ start:
     iny                       ; copy 88 bytes into vram
     cpy #88
     bne :-
+
+    ; set up sprite attributes
+    lda #192
+    sta sprite_wipe_y
+    lda #1
+    sta sprite_wipe_x
+    lda #4
+    sta sprite_wipe_p
+    lda #$0F
+    sta sprite_wipe_c
+    lda #$D0
+    sta sprite_attr_term
 
     jsr init_music_tracker
     jsr draw_map
@@ -492,6 +521,7 @@ check_line:
     cpx #PLAYFIELD_X_OFFSET+10
     bne :-
 ; row is full
+    jsr wipe_line
     sec
     rts
 @row_not_full:
@@ -499,6 +529,41 @@ check_line:
     plx
     clc
     rts
+
+; Y has the line to clear
+wipe_line:
+    ldx #PLAYFIELD_X_OFFSET
+@loop:
+    phy
+    phx
+    dey
+    tya
+    asl
+    asl
+    asl
+    sta sprite_wipe_y
+    txa
+    asl
+    asl
+    asl
+    sta sprite_wipe_x
+    lda #<sprite_wipe_y
+    sta ptr1+0
+    lda #>sprite_wipe_y
+    sta ptr1+1
+    jsr vdp_wait
+    jsr vdp_flush_sprite_attributes
+    jsr vdp_flush
+
+    plx
+    ply
+    lda #' '
+    jsr vdp_char_xy
+    inx
+    cpx #PLAYFIELD_X_OFFSET+10
+    bne @loop
+    rts
+
 
 ; drop lines down to current line given by Y
 drop_lines:
@@ -525,6 +590,9 @@ drop_lines:
     cpx #PLAYFIELD_X_OFFSET+10
     bne @clear_top_row_loop
     ldy R6                   ; restore Y
+    lda #192
+    sta sprite_wipe_y
+    jsr vdp_flush_sprite_attributes
     rts
 
 check_line_clear:
