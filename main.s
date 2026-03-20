@@ -242,6 +242,7 @@ start:
 ; This is also where we keep incrementing the seed every frame to generate some
 ; kind of randomization to the game.
 menu:
+    jsr sn_silence
     stz seed
     stz seed+1
     stz level_can_update
@@ -521,6 +522,16 @@ check_line:
     cpx #PLAYFIELD_X_OFFSET+10
     bne :-
 ; row is full
+    phy
+    jsr sn_silence
+    lda #$07
+    tay
+    ldx #2
+    jsr play_note
+    ldx #2
+    lda #0
+    jsr set_volume
+    ply
     jsr wipe_line
     sec
     rts
@@ -554,12 +565,17 @@ wipe_line:
     jsr vdp_wait
     jsr vdp_flush_sprite_attributes
     jsr vdp_flush
-
     plx
     ply
     lda #' '
     jsr vdp_char_xy
     inx
+    phx
+    ldx #2
+    lda #15
+    jsr set_volume
+    plx
+ 
     cpx #PLAYFIELD_X_OFFSET+10
     bne @loop
     rts

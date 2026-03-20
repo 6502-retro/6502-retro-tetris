@@ -9,7 +9,7 @@
 .include "bios.inc"
 
 .autoimport
-.export init_music_tracker, handle_note
+.export init_music_tracker, handle_note, play_note, set_volume
 
 .zeropage
     track_ptr: .res 2

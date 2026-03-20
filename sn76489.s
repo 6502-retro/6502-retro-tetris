@@ -2,7 +2,7 @@
 ; Library functions for basic control of the SN76489 attached to the VIA
 
 .include "io.inc"
-.export sn_start, sn_stop, sn_silence, sn_beep, sn_play_note, sn_send
+.export sn_start, sn_stop, sn_silence, sn_beep, sn_play_note, sn_send, sn_noise
 FIRST   = %10000000
 SECOND  = %00000000
 CHAN_1  = %00000000
@@ -88,7 +88,13 @@ sn_wait:
     bne sn_wait
     rts
 
-
+sn_noise:
+    lda #4
+    ora #(FIRST|CHAN_N)
+    jsr sn_send
+    lda #(FIRST|CHAN_N|VOL|VOL_MAX)
+    jsr sn_send
+    rts
 .rodata
 reverse_tbl:
     .byte $00, $80, $40, $c0, $20, $a0, $60, $e0
