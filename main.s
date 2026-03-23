@@ -1028,16 +1028,14 @@ print_score:
     jsr byte_to_hex
 
     lda score+0
-    beq :+
     ldx #PLAYFIELD_X_OFFSET+15
     ldy #11
     jsr byte_to_hex
-:   lda score+1
-    beq :+
+    lda score+1
     ldx #PLAYFIELD_X_OFFSET+13
     ldy #11
     jmp byte_to_hex
-:   rts
+    rts
 
 print_lines:
     lda lines+0
@@ -1045,16 +1043,14 @@ print_lines:
     ldy #21
     jsr byte_to_hex
     lda lines+1
-    beq :+
     ldx #PLAYFIELD_X_OFFSET+15
     ldy #21
     jsr byte_to_hex
-:   lda lines+2
-    beq :+
+    lda lines+2
     ldx #PLAYFIELD_X_OFFSET+13
     ldy #21
     jsr byte_to_hex
-:   rts
+    rts
 
 byte_to_hex:
     pha                      ; Save A for LSD.
