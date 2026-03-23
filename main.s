@@ -667,8 +667,8 @@ check_line_clear:
 @break:
     sei
     sed
-    clc
 
+    clc
     lda line_ctr
     adc lines+0
     sta lines+0
@@ -1045,12 +1045,12 @@ print_lines:
     ldy #21
     jsr byte_to_hex
     lda lines+1
-    bne :+
+    beq :+
     ldx #PLAYFIELD_X_OFFSET+15
     ldy #21
     jsr byte_to_hex
 :   lda lines+2
-    bne :+
+    beq :+
     ldx #PLAYFIELD_X_OFFSET+13
     ldy #21
     jsr byte_to_hex
