@@ -47,7 +47,10 @@ line_ctr:         .res 1
 lines:            .res 3
 level_line_ctr:   .res 1     ; every 10 lines cleared rhe speed increases to a max of 20.
 level_can_update: .res 1     ; start out as zero, set to 1 when level increases to 20
-score:            .res 2
+score:            .res 3
+input_mode:       .res 1     ; 0=keyboard, !0 = joystick
+joystate:         .res 1
+key:              .res 1
 
 sprite_attributes:
 sprite_wipe_y:    .res 1
@@ -74,17 +77,6 @@ wait_for_exit:
     jsr bios_conout
     jsr bios_conin
     jmp exit
-
-dump_regs:
-    jsr crlf
-    ldx #0
-:
-    lda R0,x
-    jsr bios_prbyte
-    inx
-    cpx #12
-    bne :-
-    rts
 
 ; AX points to 8 byte block pattern
 ; Y is the value in the name table for this block.  EG: $20 would be SPACE on a
@@ -235,6 +227,7 @@ start:
     jsr draw_map
     jsr vdp_wait
     jsr vdp_flush
+    stz joystate
 
 ;jmp menu fall through
 
@@ -272,11 +265,18 @@ menu:
 :   jsr bios_const
     cmp #' '
     bne :+
+    stz input_mode
     bra @menu_play
 :   cmp #$1B
-    bne @menu_wait
-    jmp exit
+    beq @menu_exit
+; check for fire button
+    lda IOJOY
+    eor #$FF
+    and #JOY_MAP_FIRE
+    beq @menu_wait
+    inc input_mode
 @menu_play:
+
     jsr clear_playfield
 
     stz score+0
@@ -303,6 +303,9 @@ menu:
     jsr vdp_flush
 
     jmp game_loop
+
+@menu_exit:
+        jmp exit
 
 clear_playfield:
     lda #' '
@@ -394,8 +397,17 @@ game_loop:
     ldx R1
     lda tet_blocks,x
     sta R4
-; Get input
+; Get input:
     jsr bios_const
+    sta key
+    cmp #$1B
+    bne @check_input_mode
+    jmp exit
+@check_input_mode:
+    lda input_mode
+    bne @joystick_mode
+@keyboard_mode:
+    lda key
     cmp #'z'
     bne :+
     jmp @rotate_tet_ccw
@@ -411,10 +423,29 @@ game_loop:
 :   cmp #' '
     bne :+
     jmp @hard_drop_tet
-:   cmp #$1B
+:   jmp @draw_tet
+@joystick_mode:
+    lda IOJOY
+    eor #$FF
+    cmp joystate
+    beq @draw_tet
+    sta joystate
+    and #JOY_MAP_FIRE
     beq :+
-    jmp @draw_tet
-:   jmp exit
+    jmp @rotate_tet_cw
+:   lda joystate
+    and #JOY_MAP_DOWN
+    beq :+
+    jmp @hard_drop_tet
+:   lda joystate
+    and #JOY_MAP_LEFT
+    beq :+
+    jmp @move_tet_left
+:   lda joystate
+    and #JOY_MAP_RIGHT
+    beq @draw_tet
+    jmp @move_tet_right
+
 @move_tet_left:
     dec R2
     bra @draw_tet
