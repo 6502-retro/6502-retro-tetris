@@ -84,16 +84,16 @@ map:
     .byte $b8,"          ",$b8,"          ",                           $b8,$80
     .byte $b8,"          ",$b8,"          ",                           $b8,$80
     .byte $b8,"          ",$b8,"          ",                           $b8,$80
-    .byte $b8,"          ",$bb,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$bc,$80
-    .byte $b8,"  START   ",$b8,"          ",                           $b8,$80
-    .byte $b8," [SPACE]  ",$b8,"   SCORE  ",                           $b8,$80
+    .byte $b8," FIRE or  ",$bb,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$bc,$80
+    .byte $b8," SPACE to ",$b8,"          ",                           $b8,$80
+    .byte $b8," START    ",$b8,"   SCORE  ",                           $b8,$80
     .byte $b8,"          ",$b8,"          ",                           $b8,$80
-    .byte $b8,"  EXIT!   ",$b8,"          ",                           $b8,$80
-    .byte $b8," [ ESC ]  ",$bb,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$bc,$80
+    .byte $b8,"          ",$b8,"          ",                           $b8,$80
+    .byte $b8,"          ",$bb,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$bc,$80
     .byte $b8,"          ",$b8,"          ",                           $b8,$80
     .byte $b8,"          ",$b8,"   LEVEL  ",                           $b8,$80
-    .byte $b8,"          ",$b8,"          ",                           $b8,$80
-    .byte $b8,"          ",$b8,"          ",                           $b8,$80
+    .byte $b8," ESC to   ",$b8,"          ",                           $b8,$80
+    .byte $b8," EXIT     ",$b8,"          ",                           $b8,$80
     .byte $b8,"          ",$bb,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$b9,$bc,$80
     .byte $b8,"          ",$b8,"          ",                           $b8,$80
     .byte $b8,"          ",$b8,"   LINES  ",                           $b8,$80

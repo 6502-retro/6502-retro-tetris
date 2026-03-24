@@ -2,7 +2,7 @@
 
 ## Game Mechanics
 
-This version of Tetris is mostly based on the Nintendo Gameboy version with the
+This version of Tetris is mostly based on the Nintendo GameBoy version with the
 following differences:
 
 - No soft drop.
@@ -28,6 +28,15 @@ Scoring is calculated based on the current level and the number of lines cleared
 
 ## Controls
 
+If you press `SPACE` to start a game from the menu, then the game will accept keyboard controls.
+
+If you press `FIRE` on your joystick to start a game from the menu, then the game will accept joystick controls.
+
+- Joystick controls:
+  - `FIRE` rotate cw
+  - `LEFT` move left
+  - `RIGHT` move right
+  - `DOWN` hard drop
 - Keyboard controls:
   - `z` rotate ccw
   - `x` rotate cw
