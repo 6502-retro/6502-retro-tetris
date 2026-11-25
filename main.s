@@ -31,6 +31,9 @@ R6:   .res 1
 R7:   .res 1
 
 tmp1: .res 1
+kick_ptr: .res 2           ; pointer to wall kick data for current piece/rotation
+kick_idx: .res 1           ; index (0-7) of the rotation transition in wall_kicks
+kick_off: .res 1           ; byte offset of the kick currently being tested
 
 .bss
 
@@ -51,13 +54,6 @@ score:            .res 3
 input_mode:       .res 1     ; 0=keyboard, !0 = joystick
 joystate:         .res 1
 key:              .res 1
-
-sprite_attributes:
-sprite_wipe_y:    .res 1
-sprite_wipe_x:    .res 1
-sprite_wipe_p:    .res 1
-sprite_wipe_c:    .res 1
-sprite_attr_term: .res 1
 
 .code
     ldx #$FF
@@ -141,16 +137,6 @@ start:
     sta ptr2+1
     jsr vdp_load_font_patterns
 
-    lda #<sprite_patterns
-    sta ptr1+0
-    lda #>sprite_patterns
-    sta ptr1+1
-    lda #<sprite_patterns_end
-    sta ptr2+0
-    lda #>sprite_patterns_end
-    sta ptr2+1
-    jsr vdp_load_sprite_patterns
-
     lda #<colortable
     ldx #>colortable
     jsr vdp_load_colortable
@@ -210,18 +196,6 @@ start:
     iny                       ; copy 88 bytes into vram
     cpy #88
     bne :-
-
-    ; set up sprite attributes
-    lda #192
-    sta sprite_wipe_y
-    lda #1
-    sta sprite_wipe_x
-    lda #4
-    sta sprite_wipe_p
-    lda #$0F
-    sta sprite_wipe_c
-    lda #$D0
-    sta sprite_attr_term
 
     jsr init_music_tracker
     jsr draw_map
@@ -453,16 +427,26 @@ game_loop:
     inc R2
     bra @draw_tet
 @rotate_tet_cw:
-    lda R0                   ; rotate
-    inc 
+    lda R0
+    asl                      ; kick index for CW from rotation r = 2r
+    sta kick_idx
+    lda R0
+    inc
     and #$03
     sta R0
+    jsr rotate_try_kicks
     bra @draw_tet
 @rotate_tet_ccw:
-    lda R0                   ; rotate
-    dec 
+    lda R0
+    asl
+    dec                      ; kick index for CCW from rotation r = 2r-1 (mod 8)
+    and #$07
+    sta kick_idx
+    lda R0
+    dec
     and #$03
     sta R0
+    jsr rotate_try_kicks
     bra @draw_tet
 ;jmp @draw_tet           ; fall through
 @hard_drop_tet:
@@ -532,7 +516,17 @@ hard_drop_tet:
     lda tet_blocks,x
     sta R4
     jsr draw_tet
-    bcc hard_drop_tet
+    bcs @landed
+    jsr vdp_wait             ; animate: show one cell per frame
+    jsr vdp_flush
+    inc musicframectr        ; keep the music running during the drop
+    lda musicframectr
+    cmp #$7
+    bne hard_drop_tet
+    jsr handle_note
+    stz musicframectr
+    bra hard_drop_tet
+@landed:
     dec R3
     jsr draw_tet
     jmp check_line_clear
@@ -576,28 +570,6 @@ check_line:
 wipe_line:
     ldx #PLAYFIELD_X_OFFSET
 @loop:
-    phy
-    phx
-    dey
-    tya
-    asl
-    asl
-    asl
-    sta sprite_wipe_y
-    txa
-    asl
-    asl
-    asl
-    sta sprite_wipe_x
-    lda #<sprite_wipe_y
-    sta ptr1+0
-    lda #>sprite_wipe_y
-    sta ptr1+1
-    jsr vdp_wait
-    jsr vdp_flush_sprite_attributes
-    jsr vdp_flush
-    plx
-    ply
     lda #' '
     jsr vdp_char_xy
     inx
@@ -637,9 +609,6 @@ drop_lines:
     cpx #PLAYFIELD_X_OFFSET+10
     bne @clear_top_row_loop
     ldy R6                   ; restore Y
-    lda #192
-    sta sprite_wipe_y
-    jsr vdp_flush_sprite_attributes
     rts
 
 check_line_clear:
@@ -778,7 +747,7 @@ calculate_rotation_offset_next_tet:
     mul8                     ; offset by rot x 8
     clc                      ; add to tmp
     adc tmp1
-    tay                      ; Y = tet_id * 32 + rotation * 8 - this is the offset into rotations
+    tay                      ; Y = tet_id * 32 + rotation * 8 - this is the offset into shapes
     rts
 
 ; given the tet id in A and the rotation in R0, we calculate the rotation data
@@ -791,18 +760,18 @@ calculate_rotation_offset:
     mul8                     ; offset by rot x 8
     clc                      ; add to tmp
     adc tmp1
-    tay                      ; Y = tet_id * 32 + rotation * 8 - this is the offset into rotations
+    tay                      ; Y = tet_id * 32 + rotation * 8 - this is the offset into shapes
     rts
 
 ; given X in next_tet_regs+2 and Y in next_tet_regs+3, and rotation offset in
 ; Y, return new XY position in X and Y
-calculate_xy_from_rotations_next_tet:
-    lda rotations,y
+calculate_xy_from_shapes_next_tet:
+    lda shapes,y
     clc
     adc #20                  ; x
     tax
     iny                      ; next value is Y offset
-    lda rotations,y
+    lda shapes,y
     clc
     adc #4                   ; y
     tay
@@ -811,13 +780,13 @@ calculate_xy_from_rotations_next_tet:
 
 ; given X in R2 and Y in R3, and rotation offset in Y, return new XY position
 ; in X and Y
-calculate_xy_from_rotations:
-    lda rotations,y
+calculate_xy_from_shapes:
+    lda shapes,y
     clc
     adc R2                   ; add to X
     tax
     iny                      ; next value is Y offset
-    lda rotations,y
+    lda shapes,y
     clc
     adc R3                   ; add to Y
     tay
@@ -830,7 +799,7 @@ test_tet_collision:
 @collision_loop:
     phx
     phy
-    jsr calculate_xy_from_rotations
+    jsr calculate_xy_from_shapes
     jsr tile_test_collision
     bcc :+
     ply
@@ -853,7 +822,7 @@ draw_next_tet:
 @loop:
     phx
     phy
-    jsr calculate_xy_from_rotations_next_tet
+    jsr calculate_xy_from_shapes_next_tet
     lda next_tet_regs+4
     jsr vdp_char_xy
     ply
@@ -883,7 +852,7 @@ draw_tet:
 @loop:
     phx                      ; save block counter
     phy                      ; save offset
-    jsr calculate_xy_from_rotations
+    jsr calculate_xy_from_shapes
     lda R4                   ; tet tile
     jsr vdp_char_xy
     ply                      ; restore offset
@@ -893,6 +862,64 @@ draw_tet:
     dex                      ; decrement
     bne @loop                ; loop if not finished.
     clc
+    rts
+
+; SRS wall kicks.  Called with R0 already set to the NEW rotation, R2/R3 the
+; current position, and kick_idx the transition index into wall_kicks.
+; Tries the basic rotation, then each of the 4 kick offsets.  On success R2/R3
+; hold the kicked position.  If every test fails, rotation and position are
+; restored from the saved regs so the piece does not rotate.
+rotate_try_kicks:
+    jsr test_tet_collision
+    bcc @done                ; basic rotation fits
+    lda R1                   ; kick_ptr = wall_kicks + R1 * 64 + kick_idx * 8
+    sta kick_ptr+0
+    stz kick_ptr+1
+    ldx #6
+:   asl kick_ptr+0
+    rol kick_ptr+1
+    dex
+    bne :-
+    lda kick_idx
+    mul8
+    clc
+    adc kick_ptr+0
+    sta kick_ptr+0
+    bcc :+
+    inc kick_ptr+1
+:   clc
+    lda kick_ptr+0
+    adc #<wall_kicks
+    sta kick_ptr+0
+    lda kick_ptr+1
+    adc #>wall_kicks
+    sta kick_ptr+1
+    stz kick_off
+@kick_loop:
+    ldy kick_off
+    lda regs+2               ; original X
+    clc
+    adc (kick_ptr),y
+    sta R2
+    iny
+    lda regs+3               ; original Y
+    clc
+    adc (kick_ptr),y
+    sta R3
+    iny
+    sty kick_off
+    jsr test_tet_collision
+    bcc @done
+    lda kick_off
+    cmp #8
+    bne @kick_loop
+    lda regs+0               ; all tests failed: undo rotation and position
+    sta R0
+    lda regs+2
+    sta R2
+    lda regs+3
+    sta R3
+@done:
     rts
 
 save_regs:
@@ -967,8 +994,8 @@ draw_map:
     rts
 
 ; scoring system from: https://harddrop.com/wiki/Scoring#Guideline_scoring_system
-; Note that this game does not have the Super Rotation System so the additional scores
-; for those moves are excluded here.
+; Note that the additional T-spin scores of the Super Rotation System are
+; not included here.
 ; Single    100 x level
 ; Double    300 x level
 ; Triple    500 x level
